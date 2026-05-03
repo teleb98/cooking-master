@@ -1,0 +1,8 @@
+.vercel
+node_modules/
+dist/
+.env
+server/cooking-master.db
+server/cooking-master.db-shm
+server/cooking-master.db-wal
+.env*.local

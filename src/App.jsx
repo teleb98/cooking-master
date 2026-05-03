@@ -1,0 +1,160 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { AppProvider, useApp }       from './context/AppContext';
+import { AuthProvider, useAuth }     from './context/AuthContext';
+import { FamilyProvider }            from './context/FamilyContext';
+import BottomNav         from './components/BottomNav';
+import WelcomeScreen     from './screens/WelcomeScreen';
+import LoginScreen       from './screens/LoginScreen';
+import CalendarScreen    from './screens/CalendarScreen';
+import GroceryScreen     from './screens/GroceryScreen';
+import OnboardingScreen  from './screens/OnboardingScreen';
+import ProfileScreen     from './screens/ProfileScreen';
+import ChatSheet         from './screens/ChatSheet';
+import RecipeSheet       from './screens/RecipeSheet';
+import PrivacyScreen     from './screens/PrivacyScreen';
+import DataDeletionScreen from './screens/DataDeletionScreen';
+
+function isOnboarded() {
+  return !!localStorage.getItem('cookingMaster_onboarded');
+}
+
+function RequireAuth({ children }) {
+  const { isAuthenticated, authLoading } = useAuth();
+  if (authLoading) return null;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function GlobalLoader() {
+  return (
+    <div style={{
+      height: '100dvh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      background: 'var(--bg)', gap: 20,
+    }}>
+      <div style={{
+        width: 60, height: 60, borderRadius: 18, background: 'var(--accent)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 11l1-5h16l1 5"/>
+          <path d="M3 11h18v2a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6v-2z"/>
+          <path d="M8 19v2M16 19v2"/>
+        </svg>
+      </div>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="var(--line)" strokeWidth="2.5"/>
+        <path d="M12 2a10 10 0 0 1 10 10" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round">
+          <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
+        </path>
+      </svg>
+    </div>
+  );
+}
+
+/* ── 로그인 성공 후 환영 토스트 ─────────────────────────── */
+function WelcomeToast() {
+  const [toast, setToast] = useState(null);
+  const { isAuthenticated } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const raw = sessionStorage.getItem('cm_welcome');
+    if (!raw) return;
+    sessionStorage.removeItem('cm_welcome');
+    try {
+      const { name, isNew } = JSON.parse(raw);
+      setToast({ name, isNew });
+      const t = setTimeout(() => setToast(null), 2800);
+      return () => clearTimeout(t);
+    } catch { /* ignore */ }
+  }, [isAuthenticated]);
+
+  if (!toast) return null;
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 'calc(env(safe-area-inset-top, 0px) + 16px)',
+      left: '50%', transform: 'translateX(-50%)',
+      background: 'var(--ink)', color: '#fff',
+      padding: '12px 22px', borderRadius: 14,
+      fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap',
+      boxShadow: '0 8px 28px rgba(0,0,0,0.22)',
+      zIndex: 999,
+      animation: 'toastIn 280ms cubic-bezier(0.34,1.56,0.64,1)',
+    }}>
+      {toast.isNew ? `🎉 환영해요, ${toast.name}님!` : `👋 반가워요, ${toast.name}님!`}
+      <style>{`
+        @keyframes toastIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.92); }
+          to   { opacity: 1; transform: translateX(-50%) translateY(0)     scale(1); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+const HIDE_NAV = ['/welcome', '/login', '/onboarding'];
+
+function AppShell() {
+  const { accent } = useApp();
+  const { isAuthenticated, authLoading } = useAuth();
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--accent', accent);
+  }, [accent]);
+
+  if (authLoading) return <GlobalLoader />;
+
+  return (
+    <div style={{ height: '100dvh', overflow: 'hidden', position: 'relative' }}>
+      <div style={{ height: '100%', overflowY: 'auto' }}>
+        <WelcomeToast />
+        <Routes>
+          {/* ── Smart home: auto-route by auth + onboarding state ── */}
+          <Route path="/" element={
+            !isAuthenticated       ? <WelcomeScreen />                       :
+            !isOnboarded()         ? <Navigate to="/onboarding" replace />   :
+                                     <CalendarScreen />
+          } />
+
+          {/* ── Public (redirect to / if already logged in) ── */}
+          <Route path="/welcome" element={isAuthenticated ? <Navigate to="/" replace /> : <WelcomeScreen />} />
+          <Route path="/login"   element={isAuthenticated ? <Navigate to="/" replace /> : <LoginScreen />} />
+
+          {/* ── Protected ── */}
+          <Route path="/onboarding" element={<RequireAuth><OnboardingScreen /></RequireAuth>} />
+          <Route path="/grocery"    element={<RequireAuth><GroceryScreen /></RequireAuth>} />
+          <Route path="/profile"    element={<RequireAuth><ProfileScreen /></RequireAuth>} />
+
+          {/* ── Public static pages ── */}
+          <Route path="/privacy"       element={<PrivacyScreen />} />
+          <Route path="/data-deletion" element={<DataDeletionScreen />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+
+      <ChatSheet />
+      <RecipeSheet />
+
+      <Routes>
+        {HIDE_NAV.map(p => <Route key={p} path={p} element={null} />)}
+        <Route path="*" element={<BottomNav />} />
+      </Routes>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <FamilyProvider>
+        <AppProvider>
+          <AppShell />
+        </AppProvider>
+      </FamilyProvider>
+    </AuthProvider>
+  );
+}

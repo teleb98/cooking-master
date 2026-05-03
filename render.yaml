@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: cooking-master
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true   # Render auto-generates a secure random value
+      - key: DATABASE_URL
+        sync: false           # Set manually from your Neon dashboard
