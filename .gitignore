@@ -6,3 +6,5 @@ server/cooking-master.db
 server/cooking-master.db-shm
 server/cooking-master.db-wal
 .env*.local
+.DS_Store
+api/.DS_Store
