@@ -1,220 +1,133 @@
-# Cooking Master — 서비스 시나리오 정의서
+# Cooking Master — 서비스 시나리오 & 다음 단계
 
-> 현재 구현 상태 기준으로 "무엇이 되어야 하는가"를 정의한 문서  
-> 구현 우선순위에 따라 Phase 1 → 2 → 3으로 구분
+> 마지막 업데이트: 2026-05-03  
+> Phase 1 완료 기준으로 남은 작업을 정의
 
 ---
 
-## 현재 구현 상태 진단
+## 구현 현황 요약
 
 | 화면 / 기능 | 상태 | 비고 |
 |-------------|------|------|
 | 소셜 로그인 (4종) | ✅ 완료 | Google/Kakao/Naver/Facebook |
-| 온보딩 (가족 유형, 장보는 요일, 아기 정보) | ✅ 완료 | DB 저장 작동 |
-| 식단 캘린더 | ⚠️ 목 데이터 | `data.js` PLAN 하드코딩 |
-| 장보기 목록 | ⚠️ 목 데이터 | `data.js` GROCERY 하드코딩 |
-| AI 채팅 (ChatSheet) | ⚠️ UI만 | 실제 AI 응답 없음 |
-| 레시피 시트 (RecipeSheet) | ⚠️ UI만 | 레시피 DB 없음 |
-| 파트너 초대 | ❌ 미구현 | 가짜 링크 표시 |
-| 이유식 단계 분기 | ⚠️ UI만 | 실제 식단 분기 없음 |
-| 프로필 / 설정 변경 | ⚠️ UI만 | 저장 미연동 |
+| 온보딩 | ✅ 완료 | 가족 유형·장보는 요일·아기 정보 DB 저장 |
+| 식단 캘린더 | ✅ DB 연동 | API 조회·저장, 첫 로그인 자동 시드 |
+| 장보기 목록 | ✅ DB 연동 | 식단에서 자동 생성, 체크·삭제 저장 |
+| AI 채팅 (ChatSheet) | ⚠️ UI만 | Claude API 미연동 |
+| 레시피 시트 (RecipeSheet) | ⚠️ UI만 | 재료·조리법 표시 미연동 |
+| 파트너 초대 | ❌ 미구현 | 링크 생성·수락 없음 |
+| 이유식 단계 자동 분기 | ⚠️ 부분 | 태그 표시만, 월령 기반 분기 없음 |
+| 프로필 수정 | ⚠️ 부분 | 조회됨, 저장 일부 미연동 |
 
 ---
 
-## 전체 사용자 여정
+## Phase 2 — AI 채팅 연동
+
+### 시나리오: 자연어로 식단 교체
 
 ```
-앱 진입
-  ├─ 첫 방문 → Welcome → Login → Onboarding → 식단 캘린더
-  └─ 재방문  → 자동 로그인 → 식단 캘린더
-
-식단 캘린더 (메인 화면)
-  ├─ 셀 클릭 → 레시피 시트 (상세 보기 / 교체 요청)
-  ├─ + 셀 클릭 → 메뉴 검색 / 직접 입력
-  ├─ AI FAB → 채팅 시트 (자연어 교체 요청)
-  └─ 장바구니 배너 → 장보기 목록
-
-장보기 목록
-  ├─ 체크 → 구매 완료 표시
-  ├─ 삭제 → 연관 메뉴 경고
-  └─ 공유 → 카카오톡 / 클립보드
-
-프로필
-  ├─ 가족 정보 수정
-  ├─ 파트너 초대 / 연결
-  └─ 로그아웃
+사용자: "수요일 저녁 닭고기로 바꿔줘"
+  → /api/ai/chat  (현재 식단 context 포함)
+  → Claude API 스트리밍 응답
+  → AI: "수요일 저녁을 '닭가슴살 샐러드'로 바꾸는 건 어때요? (380kcal)"
+  → [적용하기] 버튼 → PUT /api/meals
+  → 캘린더 실시간 갱신
 ```
+
+**지원할 요청 유형:**
+- 특정 날/끼니 교체: "화요일 점심 바꿔줘"
+- 기간 조정: "이번 주 고기 요리 좀 줄여줘"
+- 재료 기반: "집에 두부 있어, 두부 요리로 해줘"
+- 이유식: "아기 이번 주 중기 이유식 추천해줘"
+- 영양 기반: "단백질 높은 걸로 바꿔줘"
+
+**구현 작업:**
+- [ ] `api/ai/chat.js` — Claude API 연동 (스트리밍)
+- [ ] Vercel 환경변수: `ANTHROPIC_API_KEY` 추가
+- [ ] ChatSheet.jsx — 스트리밍 응답 렌더링
+- [ ] 응답에서 메뉴명 파싱 → [적용하기] 버튼 연결
+- [ ] 프롬프트 컨텍스트: 가족 유형, 아기 월령, 현재 2주 식단, 요청
+
+**주의:**
+- Vercel Hobby 함수 한도 11/12 → `ai/chat.js` 추가 시 12/12 (한도 꽉 참)
+- 이후 함수 추가 필요 시 기존 함수 병합 필요
 
 ---
 
-## Phase 1 — 핵심 데이터 연동 (가장 먼저)
+## Phase 2 — 레시피 시트 실제 데이터 연동
 
-> 목 데이터를 걷어내고 실제 DB와 연동
+### 시나리오: 메뉴 탭 → 레시피 상세
 
-### 1-1. 식단 DB 스키마 추가
+```
+캘린더 셀(메뉴 있음) 클릭
+  → RecipeSheet 열림
+  → GET /api/recipes/:name (또는 이름으로 조회)
+  → 표시: 메뉴명, 칼로리, 재료 목록, 이유식 여부·메모
+  → [교체] → MealPicker 시트
+  → [AI에게 비슷한 거 추천] → ChatSheet (프리셋 메시지)
+  → [장바구니에 추가] → POST /api/grocery/add (개별 추가)
+```
 
+**구현 작업:**
+- [ ] `api/recipes/index.js`에 단건 조회 추가 (GET `/api/recipes?name=xxx`)
+- [ ] RecipeSheet.jsx — DB 재료 목록 렌더링
+- [ ] 이유식 메모(baby_note) 표시
+- [ ] [AI에게 추천] 버튼 → ChatSheet 프리셋 메시지 전달
+
+---
+
+## Phase 2 — 프로필 수정 완전 연동
+
+### 시나리오: 가족 정보 변경
+
+```
+ProfileScreen → 장보는 요일 변경
+  → PUT /api/user/profile { shopping_day: 6 }
+  → FamilyContext 즉시 반영
+  → 장보기 화면 D-X 자동 업데이트
+
+ProfileScreen → 아기 정보 수정
+  → 이름·생년월일 변경
+  → 월령 자동 재계산 → 이유식 단계 업데이트
+```
+
+**구현 작업:**
+- [ ] ProfileScreen.jsx — 저장 버튼 API 연결 (현재 UI만)
+- [ ] `api/user/profile.js` PUT — 모든 필드 업데이트 확인
+- [ ] FamilyContext — 프로필 변경 시 context 재로드
+
+---
+
+## Phase 3 — 파트너 초대 / 가족 그룹
+
+### 시나리오: 파트너 연결
+
+```
+ProfileScreen → [파트너 초대] 버튼
+  → POST /api/invite → 24시간 유효 토큰 생성
+  → 공유 링크: https://cooking-master-tau.vercel.app/join?token=xxx
+  → 카카오톡 공유 or 클립보드 복사
+
+파트너가 링크 접속
+  → /join?token=xxx → 소셜 로그인
+  → GET /api/invite/:token → 토큰 검증
+  → 가족 그룹 연결 → 식단 공유 시작
+```
+
+**필요한 DB 테이블:**
 ```sql
--- 식단 계획 테이블
-create table public.meal_plans (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     text not null references public.users(id) on delete cascade,
-  plan_date   date not null,          -- 해당 날짜 (YYYY-MM-DD)
-  meal_type   text not null,          -- 'breakfast' | 'lunch' | 'dinner'
-  menu_name   text,                   -- 메뉴명 (null = 비어있음)
-  kcal        integer,
-  is_baby     boolean default false,  -- 이유식 여부
-  created_at  timestamptz default now(),
-  unique (user_id, plan_date, meal_type)
-);
-
--- 레시피 라이브러리 (공통)
-create table public.recipes (
-  id          uuid primary key default gen_random_uuid(),
-  name        text not null unique,
-  kcal        integer,
-  ingredients jsonb,   -- [{ name, qty, unit, category }]
-  tags        text[],  -- ['한식', '이유식', '고단백', ...]
-  image_url   text
-);
-
--- 장보기 목록 (식단에서 자동 생성 + 수동 추가)
-create table public.grocery_items (
-  id          uuid primary key default gen_random_uuid(),
-  user_id     text not null references public.users(id) on delete cascade,
-  week_start  date not null,          -- 해당 주 월요일
-  name        text not null,
-  qty         text,
-  category    text,
-  is_bought   boolean default false,
-  created_at  timestamptz default now()
-);
-```
-
-### 1-2. 식단 캘린더 시나리오
-
-**셀 상태:**
-```
-비어있음(+)  → 클릭 → 메뉴 검색 시트 열기
-             → 검색 or 직접 입력 → 저장
-메뉴 있음    → 클릭 → 레시피 시트 열기
-             → 레시피 시트 내 [교체] 버튼 → 검색 시트
-             → 레시피 시트 내 [AI에게 맡기기] → AI 채팅
-```
-
-**API:**
-- `GET  /api/meals?week=0` → 이번 주 식단 조회
-- `PUT  /api/meals`        → 특정 날짜/끼니 메뉴 저장
-- `DELETE /api/meals`      → 메뉴 삭제
-
-**초기 데이터 전략:**
-- 첫 로그인 시 기본 식단 자동 생성 (레시피 라이브러리에서 랜덤 추천)
-- 또는 AI에게 요청하여 1주치 생성
-
-### 1-3. 장보기 목록 시나리오
-
-**자동 생성 플로우:**
-```
-식단 저장됨
-  → 해당 메뉴의 재료 목록 추출 (recipes.ingredients)
-  → 같은 재료 합산 (예: 대파 2대 + 1대 = 3대)
-  → grocery_items에 upsert
-  → 카테고리별 정렬 (채소/육류/해산물/조미료...)
-```
-
-**체크 시나리오:**
-```
-재료 터치 → 체크(구매완료)
-         → 취소 시 체크 해제
-모두 체크 → "장보기 완료!" 토스트
-```
-
-**삭제 시나리오:**
-```
-삭제 버튼 → 해당 재료가 포함된 메뉴 목록 표시
-          → [취소] [대체 추천] [삭제] 선택
-대체 추천 → AI가 해당 재료 없는 대안 메뉴 추천
-```
-
----
-
-## Phase 2 — AI 연동
-
-### 2-1. AI 채팅 시나리오
-
-**입력 예시:**
-- "수요일 저녁 바꿔줘"
-- "이번 주 고기 요리 좀 줄여줘"
-- "오늘 저녁 재료 이미 있는 거로 해줘"
-- "아기 이유식 이번 주 추천해줘"
-
-**처리 플로우:**
-```
-사용자 입력
-  → Claude API (식단 context 포함 프롬프트)
-  → AI 응답: 추천 메뉴 + 이유
-  → [적용하기] 버튼 → meal_plans 업데이트
-  → 장바구니 자동 갱신
-```
-
-**API:**
-- `POST /api/ai/chat` → 메시지 + 현재 식단 전송 → AI 응답 스트리밍
-
-**프롬프트 컨텍스트에 포함할 것:**
-- 가족 유형 (solo/couple/family)
-- 아기 월령 + 이유식 단계
-- 현재 2주 식단
-- 기피 재료 (미래 기능)
-
-### 2-2. 레시피 시트 시나리오
-
-**열릴 때 표시:**
-- 메뉴명, 칼로리
-- 재료 목록 (양 포함)
-- 조리 시간 (예상)
-- 이유식 여부 + 단계
-
-**액션:**
-- [AI에게 비슷한 거 추천] → 채팅 시트 with 프리셋 메시지
-- [교체] → 메뉴 검색 시트
-- [장바구니에 추가] → 해당 메뉴 재료를 grocery에 추가
-
----
-
-## Phase 3 — 파트너 / 가족 기능
-
-### 3-1. 파트너 초대 시나리오
-
-**초대 플로우:**
-```
-온보딩 "파트너 초대" 단계
-  → [초대 링크 생성] 버튼 클릭
-  → 서버: 24시간 유효 토큰 생성 → invite_tokens 테이블 저장
-  → 링크: https://cooking-master-tau.vercel.app/join?token=xxx
-  → 카카오톡/클립보드 공유
-
-파트너가 링크 클릭
-  → 앱 진입 → 로그인 (SNS)
-  → 토큰 검증 → 가족 그룹 연결
-  → 두 식단 병합 (취향 합산)
-```
-
-**필요한 DB:**
-```sql
--- 가족 그룹
 create table public.families (
-  id         uuid primary key default gen_random_uuid(),
+  id uuid primary key default gen_random_uuid(),
   created_at timestamptz default now()
 );
 
--- 가족 구성원
 create table public.family_members (
-  family_id  uuid references public.families(id),
-  user_id    text references public.users(id),
-  role       text default 'member',  -- 'owner' | 'member'
+  family_id uuid references public.families(id),
+  user_id   text references public.users(id),
+  role      text default 'member',  -- 'owner' | 'member'
   primary key (family_id, user_id)
 );
 
--- 초대 토큰
 create table public.invite_tokens (
   token      text primary key,
   family_id  uuid references public.families(id),
@@ -224,55 +137,81 @@ create table public.invite_tokens (
 );
 ```
 
-### 3-2. 이유식 자동 분기 시나리오
+**구현 작업:**
+- [ ] DB 테이블 생성 (위 SQL 실행)
+- [ ] `api/invite/index.js` — 초대 토큰 생성 (POST)
+- [ ] `api/invite/[token].js` — 토큰 수락 (GET/POST)
+- [ ] `/join` 라우트 + JoinScreen.jsx — 초대 수락 화면
+- [ ] FamilyContext — 가족 그룹 식단 merge 로직
+
+**⚠️ 함수 한도 주의:** 현재 11/12. Phase 3 추가 시 한도 초과 → Pro 플랜 업그레이드 또는 함수 병합 필요
+
+---
+
+## Phase 3 — 이유식 단계 자동 분기
+
+### 시나리오: 월령 기반 자동 전환
 
 ```
-아기 월령 계산 (baby_birthday 기준)
-  → 초기(0-5M) / 중기(6-8M) / 후기(9-11M) / 완료기(12M+)
+앱 진입 시 월령 체크
+  → baby_birthday 기준 현재 월령 계산
+  → 이전 방문 대비 단계 변경 감지
+    초기 (0-5개월) / 중기 (6-8개월) / 후기 (9-11개월) / 완료기 (12개월+)
+  → 단계 변경 시 토스트: "○○가 중기로 넘어갔어요! 식단을 업데이트할까요?"
+  → [업데이트] → AI에게 해당 단계 이유식 1주치 요청
 
 식단 생성 시
-  → 성인 식단 + 이유식 칸 별도 생성
-  → 이유식은 해당 단계에 맞는 레시피만 추천
-  → 캘린더에 파란 점으로 표시
-
-이유식 단계 변경 시 (월령 자동 갱신)
-  → 앱 진입 시 체크 → 단계 변경 감지 → 알림 토스트
-  → "○○가 중기로 넘어갔어요! 식단을 업데이트할까요?"
+  → 성인 식단 + 이유식 칸 별도 분리
+  → 이유식 레시피만 필터링 (baby: true, 해당 단계 태그)
+  → 캘린더 셀에 이유식 배지 표시
 ```
+
+**구현 작업:**
+- [ ] FamilyContext — 월령 계산 + 단계 변화 감지 로직
+- [ ] 레시피 시드 데이터 — 이유식 단계별 태그 추가 (초기/중기/후기)
+- [ ] AI 프롬프트 — 이유식 단계 컨텍스트 포함
+- [ ] 캘린더 UI — 이유식 셀 시각적 구분
 
 ---
 
-## 구현 우선순위
+## 기타 — 서비스 안정화
 
-```
-[즉시] Phase 1-1  DB 스키마 추가 (meal_plans, recipes, grocery_items)
-[즉시] Phase 1-2  식단 캘린더 API + 실제 저장/조회
-[즉시] Phase 1-3  장보기 목록 자동 생성 + 체크 저장
-
-[다음] Phase 2-1  AI 채팅 (Claude API 연동)
-[다음] Phase 2-2  레시피 시트 실제 데이터 연동
-
-[이후] Phase 3-1  파트너 초대 + 가족 그룹
-[이후] Phase 3-2  이유식 자동 분기 고도화
-```
+| 항목 | 내용 | 우선순위 |
+|------|------|----------|
+| Facebook 앱 라이브 전환 | 비즈니스 신원 인증 완료 후 게시 | 🔴 높음 |
+| Google OAuth 앱 검수 | 구글 콘솔에서 검수 신청 (현재 테스트 모드) | 🟡 중간 |
+| 모바일 PWA | `manifest.json`, 아이콘, 홈 화면 추가 | 🟡 중간 |
+| 에러 모니터링 | Vercel Analytics 또는 Sentry 연동 | 🟢 낮음 |
+| 커스텀 도메인 | Vercel 도메인 연결 | 🟢 낮음 |
 
 ---
 
-## API 전체 목록 (완성 후 기준)
+## 전체 API 목록 (현재 완성 기준)
 
-| Method | Path | 설명 |
-|--------|------|------|
-| GET | `/api/auth/providers` | 공급자 설정 상태 |
-| GET | `/api/auth/me` | 현재 사용자 |
-| POST | `/api/auth/logout` | 로그아웃 |
-| GET | `/api/user/profile` | 프로필 조회 |
-| PUT | `/api/user/profile` | 프로필 수정 |
-| GET | `/api/meals?week=0` | 식단 조회 |
-| PUT | `/api/meals` | 식단 저장 |
-| DELETE | `/api/meals` | 식단 삭제 |
-| GET | `/api/grocery?week=0` | 장보기 목록 |
-| PUT | `/api/grocery/:id` | 체크 상태 변경 |
-| POST | `/api/grocery/generate` | 식단에서 장보기 자동 생성 |
-| POST | `/api/ai/chat` | AI 채팅 |
-| POST | `/api/invite` | 초대 링크 생성 |
-| GET | `/api/invite/:token` | 초대 토큰 검증 |
+| Method | Path | 설명 | 상태 |
+|--------|------|------|------|
+| GET | `/api/auth/providers` | 공급자 설정 상태 | ✅ |
+| GET | `/api/auth/me` | 현재 사용자 | ✅ |
+| POST | `/api/auth/logout` | 로그아웃 | ✅ |
+| GET→POST | `/api/auth/oauth` → `/api/auth/callback` | OAuth 플로우 | ✅ |
+| POST | `/api/auth/facebook-deletion` | Facebook 삭제 콜백 | ✅ |
+| GET/PUT | `/api/user/profile` | 프로필 조회/수정 | ✅ |
+| GET/PUT | `/api/meals` | 식단 조회/저장 | ✅ |
+| GET | `/api/recipes` | 레시피 목록 | ✅ |
+| GET/PUT/DELETE | `/api/grocery` | 장보기 목록 | ✅ |
+| POST | `/api/grocery/generate` | 식단→장보기 자동 생성 | ✅ |
+| POST | `/api/ai/chat` | AI 채팅 | ❌ 미구현 |
+| POST | `/api/invite` | 초대 링크 생성 | ❌ 미구현 |
+| GET | `/api/invite/:token` | 초대 수락 | ❌ 미구현 |
+
+---
+
+## 권장 다음 작업 순서
+
+```
+1. 앱 테스트 — 로그인 → 캘린더 → 장보기 전체 흐름 확인
+2. Phase 2-1 AI 채팅 — ANTHROPIC_API_KEY 추가 → api/ai/chat.js 구현
+3. Phase 2-2 레시피 시트 — RecipeSheet 실제 재료 표시
+4. Facebook 라이브 — 신원 인증 완료 후 앱 게시
+5. Phase 3 파트너 초대 — 가족 그룹 DB + 초대 플로우
+```
