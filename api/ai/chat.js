@@ -118,6 +118,9 @@ ${recipeList}
     return res.json({ text: displayText, changes });
   } catch (err) {
     console.error('[ai/chat]', err.message);
-    return res.status(500).json({ error: err.message });
+    if (err.message?.includes('credit')) {
+      return res.status(402).json({ error: 'AI 크레딧이 부족합니다. 관리자에게 문의하세요.' });
+    }
+    return res.status(500).json({ error: 'AI 응답 중 오류가 발생했습니다.' });
   }
 }

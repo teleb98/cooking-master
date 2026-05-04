@@ -113,8 +113,11 @@ export default function ChatSheet() {
       ]));
       historyRef.current = [...historyRef.current, { from: 'user', text }, { from: 'ai', text: data.text }];
     } catch (err) {
+      const msg = err.message.includes('402')
+        ? 'AI 서비스 크레딧이 부족합니다. 잠시 후 다시 시도해주세요.'
+        : '죄송해요, 일시적인 오류입니다. 잠시 후 다시 시도해주세요.';
       setMessages(prev => prev.filter(m => m.kind !== 'thinking').concat([
-        { from: 'ai', kind: 'text', text: '죄송해요, 잠시 후 다시 시도해주세요. (오류: ' + err.message + ')' },
+        { from: 'ai', kind: 'text', text: msg },
       ]));
     } finally {
       setSending(false);
