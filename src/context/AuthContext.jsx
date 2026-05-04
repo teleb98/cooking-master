@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem(TOKEN_KEY);
     if (!token) { setAuthLoading(false); return; }
 
-    apiFetch('/auth/me')
+    apiFetch('/user/profile')
       .then(data => setUser(data.user))
       .catch(() => localStorage.removeItem(TOKEN_KEY))
       .finally(() => setAuthLoading(false));
@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
   // Called after OAuth callback: stores token, fetches user
   const loginWithToken = useCallback(async (token) => {
     localStorage.setItem(TOKEN_KEY, token);
-    const data = await apiFetch('/auth/me');
+    const data = await apiFetch('/user/profile');
     setUser(data.user);
     return data.user;
   }, []);

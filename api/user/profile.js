@@ -1,23 +1,22 @@
-import { db } from '../_db.js';
-import { verifyToken } from '../_auth.js';
+import { db, fmt } from '../_db.js';
+import { verifyToken, toPublicUser } from '../_auth.js';
 
 export default async function handler(req, res) {
   const payload = verifyToken(req);
   if (!payload) return res.status(401).json({ error: 'Unauthorized' });
-
   const uid = payload.userId;
 
-  if (req.method === 'GET') {
-    try {
-      const profile = await db.getOne('user_profiles', { user_id: uid });
-      res.json({ profile: profile ?? {} });
-    } catch (err) {
-      console.error('[profile/get]', err);
-      res.status(500).json({ error: 'Server error' });
+  try {
+    if (req.method === 'GET') {
+      const [userRow, profile] = await Promise.all([
+        db.getOne('users', { id: uid }),
+        db.getOne('user_profiles', { user_id: uid }),
+      ]);
+      if (!userRow) return res.status(401).json({ error: 'User not found' });
+      return res.json({ user: toPublicUser(userRow, fmt), profile: profile ?? {} });
     }
 
-  } else if (req.method === 'PUT') {
-    try {
+    if (req.method === 'PUT') {
       const {
         family_type   = 'couple',
         baby_birthday = null,
@@ -27,24 +26,15 @@ export default async function handler(req, res) {
 
       const profile = await db.upsert(
         'user_profiles',
-        {
-          user_id: uid,
-          family_type,
-          baby_birthday,
-          shopping_day,
-          partner_name,
-          updated_at: new Date().toISOString(),
-        },
+        { user_id: uid, family_type, baby_birthday, shopping_day, partner_name, updated_at: new Date().toISOString() },
         'user_id',
       );
-
-      res.json({ profile });
-    } catch (err) {
-      console.error('[profile/put]', err);
-      res.status(500).json({ error: 'Server error' });
+      return res.json({ profile });
     }
 
-  } else {
-    res.status(405).end();
+    return res.status(405).end();
+  } catch (err) {
+    console.error('[user/profile]', err.message);
+    res.status(500).json({ error: 'Server error' });
   }
 }
