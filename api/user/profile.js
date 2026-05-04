@@ -25,25 +25,11 @@ export default async function handler(req, res) {
         partner_name  = null,
       } = req.body ?? {};
 
-      let profile;
-      try {
-        profile = await db.upsert(
-          'user_profiles',
-          { user_id: uid, family_type, baby_birthday, baby_name, shopping_day, partner_name, updated_at: new Date().toISOString() },
-          'user_id',
-        );
-      } catch (err) {
-        // If baby_name column doesn't exist yet, retry without it
-        if (err.message?.includes('baby_name')) {
-          profile = await db.upsert(
-            'user_profiles',
-            { user_id: uid, family_type, baby_birthday, shopping_day, partner_name, updated_at: new Date().toISOString() },
-            'user_id',
-          );
-        } else {
-          throw err;
-        }
-      }
+      const profile = await db.upsert(
+        'user_profiles',
+        { user_id: uid, family_type, baby_birthday, baby_name, shopping_day, partner_name, updated_at: new Date().toISOString() },
+        'user_id',
+      );
       return res.json({ profile });
     }
 
