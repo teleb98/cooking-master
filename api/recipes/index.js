@@ -8,6 +8,19 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end();
 
   try {
+    const { name } = req.query;
+
+    // Single recipe query: GET /api/recipes?name=xxx
+    if (name) {
+      const { data, error } = await db.supabase
+        .from('recipes')
+        .select('name, kcal, baby, baby_note, tags, ingredients')
+        .eq('name', name)
+        .maybeSingle();
+      if (error) throw error;
+      return res.json({ recipe: data ?? null });
+    }
+
     const { data, error } = await db.supabase
       .from('recipes')
       .select('name, kcal, baby, baby_note, tags')

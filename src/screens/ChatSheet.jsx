@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { useFamily } from '../context/FamilyContext';
 import { Sheet } from '../components/Sheet';
 import Icon from '../icons';
 
@@ -102,13 +103,17 @@ const QUICK_REPLIES = ['이번 주 다시 추천', '금요일 저녁 바꿔줘',
 
 export default function ChatSheet() {
   const { chatOpen, setChatOpen, accent } = useApp();
+  const { family } = useFamily();
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const [messages, setMessages] = useState([]);
   const bottomRef = useRef(null);
 
   useEffect(() => {
-    if (chatOpen) setMessages(INITIAL_MESSAGES);
-  }, [chatOpen]);
+    if (chatOpen) {
+      const greeting = `안녕하세요 ${family.name}! 이번 주 식단 어떻게 도와드릴까요?`;
+      setMessages([{ from: 'ai', kind: 'text', text: greeting, sub: "How can I help with this week's plan?" }]);
+    }
+  }, [chatOpen, family.name]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });

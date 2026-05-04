@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MEAL_TYPES, DAYS_KR } from '../data';
 import { useApp } from '../context/AppContext';
@@ -131,7 +131,7 @@ export default function CalendarScreen() {
   const [loading, setLoading] = useState(true);
   const [picker, setPicker] = useState(null);
 
-  const { accent, setChatOpen, setRecipe } = useApp();
+  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot } = useApp();
   const { family } = useFamily();
   const navigate = useNavigate();
 
@@ -159,9 +159,17 @@ export default function CalendarScreen() {
       .finally(() => setLoading(false));
   }, [weekStart]);
 
+  // RecipeSheet "교체" 버튼 → replaceSlot 감지해서 picker 열기
+  useEffect(() => {
+    if (replaceSlot) {
+      setPicker(replaceSlot);
+      setReplaceSlot(null);
+    }
+  }, [replaceSlot, setReplaceSlot]);
+
   const handleCellClick = (date, mealType, meal) => {
     if (meal?.menu_name) {
-      setRecipe(meal.menu_name);
+      setRecipe({ name: meal.menu_name, plan_date: toDateStr(date), meal_type: mealType });
     } else {
       setPicker({ plan_date: toDateStr(date), meal_type: mealType });
     }
