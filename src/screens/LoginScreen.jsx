@@ -125,6 +125,12 @@ export default function LoginScreen() {
 
         sessionStorage.setItem('cm_welcome', JSON.stringify({ name: name || '사용자', isNew }));
 
+        // Returning users: restore onboarded flag synchronously before loginWithToken
+        // so the route at "/" sees isOnboarded()=true the moment isAuthenticated flips.
+        if (!isNew) {
+          localStorage.setItem('cookingMaster_onboarded', '1');
+        }
+
         loginWithToken(token).catch(() => {
           setErrorMsg('로그인에 실패했습니다. 다시 시도해주세요.');
         });

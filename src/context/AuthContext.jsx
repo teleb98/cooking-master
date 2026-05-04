@@ -47,7 +47,6 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     await apiFetch('/auth/logout', { method: 'POST' }).catch(() => {});
     localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem('cookingMaster_onboarded');
     setUser(null);
   }, []);
 
