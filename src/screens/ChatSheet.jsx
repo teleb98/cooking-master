@@ -94,10 +94,8 @@ export default function ChatSheet() {
     setSending(true);
     setInput('');
 
-    const userMsg = { from: 'user', kind: 'text', text };
-    setMessages(prev => [...prev, userMsg, { from: 'ai', kind: 'thinking' }]);
-
-    const history = historyRef.current.slice(-10); // last 5 turns
+    setMessages(prev => [...prev, { from: 'user', kind: 'text', text }, { from: 'ai', kind: 'thinking' }]);
+    const history = historyRef.current.slice(-8);
 
     try {
       const token = localStorage.getItem(TOKEN_KEY);
@@ -108,46 +106,15 @@ export default function ChatSheet() {
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
 
-      const aiMsgId = Date.now();
       setMessages(prev => prev.filter(m => m.kind !== 'thinking').concat([
-        { id: aiMsgId, from: 'ai', kind: 'text', text: '', streaming: true, changes: null },
+        { from: 'ai', kind: 'text', text: data.text, changes: data.changes },
       ]));
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = '';
-      let finalChanges = null;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const lines = decoder.decode(value).split('\n');
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.text) {
-              fullText += data.text;
-              setMessages(prev => prev.map(m =>
-                m.id === aiMsgId ? { ...m, text: fullText } : m
-              ));
-            }
-            if (data.done) {
-              finalChanges = data.changes;
-            }
-          } catch { /* ignore parse errors */ }
-        }
-      }
-
-      setMessages(prev => prev.map(m =>
-        m.id === aiMsgId ? { ...m, streaming: false, changes: finalChanges } : m
-      ));
-
-      historyRef.current = [...historyRef.current, { from: 'user', text }, { from: 'ai', text: fullText }];
+      historyRef.current = [...historyRef.current, { from: 'user', text }, { from: 'ai', text: data.text }];
     } catch (err) {
       setMessages(prev => prev.filter(m => m.kind !== 'thinking').concat([
-        { from: 'ai', kind: 'text', text: '죄송해요, 연결에 문제가 생겼어요. 다시 시도해주세요.' },
+        { from: 'ai', kind: 'text', text: '죄송해요, 잠시 후 다시 시도해주세요. (오류: ' + err.message + ')' },
       ]));
     } finally {
       setSending(false);
