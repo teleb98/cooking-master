@@ -123,7 +123,7 @@ export default function LoginScreen() {
         const name = decodeURIComponent(hash.get('name') ?? '');
         const isNew = hash.get('is_new') === 'true';
 
-        if (name) sessionStorage.setItem('cm_welcome', JSON.stringify({ name, isNew }));
+        sessionStorage.setItem('cm_welcome', JSON.stringify({ name: name || '사용자', isNew }));
 
         loginWithToken(token).catch(() => {
           setErrorMsg('로그인에 실패했습니다. 다시 시도해주세요.');

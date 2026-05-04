@@ -61,6 +61,8 @@ export function FamilyProvider({ children }) {
           const merged = { ...DEFAULTS, ...srv };
           setProfile(merged);
           localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          // Restore onboarded flag for returning users who logged out
+          localStorage.setItem('cookingMaster_onboarded', '1');
         }
       })
       .catch(() => {});
