@@ -1,16 +1,3 @@
-export const FAMILY = {
-  family_name: '김민준 · 이서연 가족',
-  family_name_en: 'Kim & Lee family',
-  baby_name: '하준',
-  baby_months: 8,
-  baby_stage: '중기',
-  baby_stage_en: 'mid-stage',
-  shopping_day: 6,
-  members: [
-    { name: '민준', role: 'owner', initial: '민', color: '#C8654A' },
-    { name: '서연', role: 'partner', initial: '서', color: '#6F8E5A' },
-  ],
-};
 
 export const TODAY_INDEX = 2; // 0=Mon…6=Sun
 export const TODAY_DATE = 6;  // May 6

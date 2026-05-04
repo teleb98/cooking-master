@@ -20,13 +20,14 @@ export default async function handler(req, res) {
       const {
         family_type   = 'couple',
         baby_birthday = null,
+        baby_name     = null,
         shopping_day  = 6,
         partner_name  = null,
       } = req.body ?? {};
 
       const profile = await db.upsert(
         'user_profiles',
-        { user_id: uid, family_type, baby_birthday, shopping_day, partner_name, updated_at: new Date().toISOString() },
+        { user_id: uid, family_type, baby_birthday, baby_name, shopping_day, partner_name, updated_at: new Date().toISOString() },
         'user_id',
       );
       return res.json({ profile });

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import { FAMILY } from '../data';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { useFamily } from '../context/FamilyContext';
 import Icon from '../icons';
 
 const PRESET_ACCENTS = [
@@ -19,9 +19,38 @@ const PROVIDER_LABEL = {
   facebook: { label: 'Facebook',  color: '#1877F2', bg: '#E7F0FD' },
 };
 
+const AVATAR_COLORS = ['#C8654A', '#6F8E5A', '#3F4D8A', '#C9943C'];
+
+function Avatar({ name, size = 44, colorIdx = 0 }) {
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', flexShrink: 0,
+      background: AVATAR_COLORS[colorIdx % AVATAR_COLORS.length],
+      color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: size * 0.35, fontWeight: 700,
+    }}>
+      {(name ?? '?')[0]}
+    </div>
+  );
+}
+
+function MemberRow({ name, role, colorIdx }) {
+  const roleLabel = { owner: '나', partner: '파트너', baby: '아기' }[role] ?? role;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
+      <Avatar name={name} size={38} colorIdx={colorIdx} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{name}</div>
+        <div className="kr-en" style={{ marginTop: 1 }}>{roleLabel}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProfileScreen() {
   const { accent, setAccent } = useApp();
   const { user, logout } = useAuth();
+  const { family } = useFamily();
   const navigate = useNavigate();
 
   const provider = user?.provider ? PROVIDER_LABEL[user.provider] : null;
@@ -30,6 +59,11 @@ export default function ProfileScreen() {
     logout();
     navigate('/login', { replace: true });
   };
+
+  // Build member list from real data
+  const members = [];
+  if (user?.name) members.push({ name: user.name, role: 'owner', colorIdx: 0 });
+  if (family.partner_name) members.push({ name: family.partner_name, role: 'partner', colorIdx: 1 });
 
   return (
     <div style={{
@@ -43,15 +77,7 @@ export default function ProfileScreen() {
         <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
           <div className="kr-en" style={{ marginBottom: 10 }}>ACCOUNT · 내 계정</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {/* 아바타 */}
-            <div style={{
-              width: 50, height: 50, borderRadius: '50%', flexShrink: 0,
-              background: 'var(--accent)', color: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 20, fontWeight: 700,
-            }}>
-              {user.name[0]}
-            </div>
+            <Avatar name={user.name} size={50} colorIdx={0} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)' }}>{user.name}</div>
               <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.email}</div>
@@ -84,33 +110,47 @@ export default function ProfileScreen() {
       {/* 가족 카드 */}
       <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
         <div className="kr-en" style={{ marginBottom: 10 }}>FAMILY · 가족</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ display: 'flex' }}>
-            {FAMILY.members.map((m, i) => (
-              <div key={m.name} style={{
-                width: 44, height: 44, borderRadius: '50%',
-                background: m.color, color: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, fontWeight: 600,
-                border: '2px solid var(--surface)',
-                marginLeft: i > 0 ? -10 : 0,
-              }}>
-                {m.initial}
-              </div>
+
+        {members.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {members.map((m, i) => (
+              <MemberRow key={m.name + i} {...m} />
             ))}
           </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>{FAMILY.family_name}</div>
-            <div className="kr-en">{FAMILY.family_name_en}</div>
+        ) : (
+          <div style={{ color: 'var(--ink-3)', fontSize: 13, padding: '8px 0' }}>
+            패밀리 설정을 완료해주세요.
           </div>
-        </div>
-        <div style={{ marginTop: 14, padding: '12px 14px', background: 'var(--baby-soft)', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--baby-ink)' }}>
-          {Icon.baby(18)}
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600 }}>{FAMILY.baby_name} · {FAMILY.baby_months}개월 · {FAMILY.baby_stage}</div>
-            <div className="kr-en" style={{ marginTop: 2 }}>이유식 자동 분기 활성화</div>
+        )}
+
+        {/* 아기 정보 */}
+        {family.has_baby && (
+          <div style={{ marginTop: 14, padding: '12px 14px', background: 'var(--baby-soft)', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--baby-ink)' }}>
+            {Icon.baby(18)}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>
+                {family.baby_name ? `${family.baby_name} · ` : ''}{family.baby_months}개월 · {family.baby_stage}
+              </div>
+              <div className="kr-en" style={{ marginTop: 2 }}>이유식 자동 분기 활성화</div>
+            </div>
           </div>
+        )}
+
+        {/* 타입 뱃지 */}
+        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+          {[
+            { key: 'solo',   label: '1인' },
+            { key: 'couple', label: '커플' },
+            { key: 'family', label: '가족' },
+          ].map(opt => (
+            <span key={opt.key} style={{
+              padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600,
+              background: family.type === opt.key ? accent : 'var(--bg-2)',
+              color: family.type === opt.key ? '#fff' : 'var(--ink-3)',
+            }}>{opt.label}</span>
+          ))}
         </div>
+
         <button onClick={() => navigate('/onboarding')} style={{
           marginTop: 12, width: '100%', padding: '11px 0', borderRadius: 10,
           border: '1px solid var(--line)', background: 'var(--bg)',
@@ -120,8 +160,27 @@ export default function ProfileScreen() {
         </button>
       </div>
 
-      {/* 강조색 */}
+      {/* 장보는 요일 */}
       <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
+        <div className="kr-en" style={{ marginBottom: 4 }}>SHOPPING DAY · 장보는 요일</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>
+          {family.shopping_day_kr}요일
+        </div>
+        <div style={{ marginTop: 8, height: 6, background: 'var(--bg-2)', borderRadius: 999, overflow: 'hidden' }}>
+          <div style={{
+            height: '100%',
+            width: `${Math.round(((family.shopping_day + 1) / 7) * 100)}%`,
+            background: 'linear-gradient(90deg, var(--baby) 0%, #B8C58A 60%, var(--warn) 100%)',
+            borderRadius: 999,
+          }} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--ink-3)' }}>
+          <span>월요일 기준 {family.shopping_day_kr}요일 장보기</span>
+        </div>
+      </div>
+
+      {/* 강조색 */}
+      <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16 }}>
         <div className="kr-en" style={{ marginBottom: 12 }}>ACCENT COLOR · 강조색</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
           {PRESET_ACCENTS.map(p => (
@@ -135,19 +194,6 @@ export default function ProfileScreen() {
               outlineOffset: 2,
             }} title={p.name} />
           ))}
-        </div>
-      </div>
-
-      {/* 장보는 요일 */}
-      <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16 }}>
-        <div className="kr-en" style={{ marginBottom: 4 }}>SHOPPING DAY · 장보는 요일</div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)', marginTop: 6 }}>일요일 · Sunday</div>
-        <div style={{ marginTop: 8, height: 6, background: 'var(--bg-2)', borderRadius: 999, overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: '42%', background: 'linear-gradient(90deg, var(--baby) 0%, #B8C58A 60%, var(--warn) 100%)', borderRadius: 999 }} />
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--ink-3)' }}>
-          <span>신선도 D+3 · 신선 구간</span>
-          <span style={{ fontFamily: 'var(--font-mono)' }}>D-4</span>
         </div>
       </div>
     </div>

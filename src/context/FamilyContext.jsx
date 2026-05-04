@@ -9,6 +9,7 @@ const TOKEN_KEY   = 'cookingMaster_token';
 const DEFAULTS = {
   family_type:   'couple',
   baby_birthday: null,
+  baby_name:     null,
   shopping_day:  6,
   partner_name:  null,
 };
@@ -87,6 +88,7 @@ export function FamilyProvider({ children }) {
     type:           profile.family_type,
     // Baby
     has_baby:       !!profile.baby_birthday,
+    baby_name:      profile.baby_name ?? null,
     baby_months:    months,
     baby_stage:     stage,
     baby_stage_en:  stage_en,

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DAYS_KR } from '../data';
 import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
+import { useAuth } from '../context/AuthContext';
 import Icon from '../icons';
 
 function Hero({ kr, en, sub }) {
@@ -40,6 +41,26 @@ function TypeCard({ kr, en, desc, active, onClick, accent }) {
   );
 }
 
+function NameInput({ label, labelEn, value, onChange, placeholder }) {
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div className="kr-en">{labelEn}</div>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{
+          marginTop: 6, width: '100%', padding: '13px 14px', borderRadius: 10,
+          border: '1px solid var(--line)', background: 'var(--bg)',
+          fontSize: 16, color: 'var(--ink)', outline: 'none',
+          fontFamily: 'inherit',
+        }}
+      />
+    </div>
+  );
+}
+
 function calcBaby(bday) {
   if (!bday) return null;
   const months = Math.floor((Date.now() - new Date(bday)) / (1000 * 60 * 60 * 24 * 30.44));
@@ -54,13 +75,16 @@ const SKIP = () => { localStorage.setItem('cookingMaster_onboarded', '1'); };
 export default function OnboardingScreen() {
   const { accent } = useApp();
   const { saveProfile } = useFamily();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [step, setStep]       = useState(0);
-  const [type, setType]       = useState('couple');
-  const [shopday, setShopday] = useState(6);
-  const [saving, setSaving]   = useState(false);
-  const [errMsg, setErrMsg]   = useState('');
+  const [step, setStep]             = useState(0);
+  const [type, setType]             = useState('couple');
+  const [partnerName, setPartnerName] = useState('');
+  const [babyName, setBabyName]     = useState('');
+  const [shopday, setShopday]       = useState(6);
+  const [saving, setSaving]         = useState(false);
+  const [errMsg, setErrMsg]         = useState('');
 
   const defaultBday = (() => {
     const d = new Date();
@@ -72,6 +96,7 @@ export default function OnboardingScreen() {
   // Active steps depend on type selection
   const steps = useMemo(() => {
     const s = [{ key: 'type', label: '사용 유형' }];
+    if (type === 'couple' || type === 'family') s.push({ key: 'members', label: '가족 이름' });
     if (type === 'family') s.push({ key: 'baby', label: '아기 정보' });
     s.push({ key: 'shopday', label: '장보는 요일' });
     return s;
@@ -82,6 +107,8 @@ export default function OnboardingScreen() {
   const isLast     = step === totalSteps - 1;
   const baby       = calcBaby(bday);
 
+  const myName = user?.name ?? '';
+
   const next = async () => {
     if (!isLast) { setStep(s => s + 1); return; }
     setSaving(true);
@@ -89,7 +116,9 @@ export default function OnboardingScreen() {
     try {
       await saveProfile({
         family_type:   type,
+        partner_name:  (type === 'couple' || type === 'family') ? (partnerName.trim() || null) : null,
         baby_birthday: type === 'family' ? bday : null,
+        baby_name:     type === 'family' ? (babyName.trim() || null) : null,
         shopping_day:  shopday,
       });
       localStorage.setItem('cookingMaster_onboarded', '1');
@@ -152,22 +181,71 @@ export default function OnboardingScreen() {
           </div>
         )}
 
+        {/* Step: 가족 이름 (couple / family) */}
+        {currentKey === 'members' && (
+          <div>
+            <Hero
+              kr="함께하는 분의 이름을 알려주세요"
+              en="Who are you cooking with?"
+              sub="앱 내 호칭으로 사용됩니다."
+            />
+            <div style={{ marginTop: 18, padding: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14 }}>
+              {/* 내 이름 (읽기 전용, OAuth에서 가져옴) */}
+              <div className="kr-en">나 · Me</div>
+              <div style={{
+                marginTop: 6, padding: '13px 14px', borderRadius: 10,
+                border: '1px solid var(--line)', background: 'var(--bg-2)',
+                fontSize: 16, color: 'var(--ink-3)',
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: accent, color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 700, flexShrink: 0,
+                }}>{myName[0] ?? '나'}</div>
+                <span style={{ color: 'var(--ink)' }}>{myName || '소셜 로그인 계정'}</span>
+              </div>
+
+              {/* 파트너 이름 */}
+              <NameInput
+                label="파트너"
+                labelEn="PARTNER · 파트너"
+                value={partnerName}
+                onChange={setPartnerName}
+                placeholder="이름 입력 (선택)"
+              />
+            </div>
+          </div>
+        )}
+
         {/* Step: 아기 정보 (family only) */}
         {currentKey === 'baby' && (
           <div>
             <Hero kr="아기 정보를 입력하세요" en="Tell us about your baby" sub="이유식 단계가 자동 계산되어 식단에 분기됩니다." />
             <div style={{ marginTop: 18, padding: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14 }}>
-              <div className="kr-en">생년월일 · Birthday</div>
-              <input
-                type="date"
-                value={bday}
-                onChange={e => setBday(e.target.value)}
-                style={{
-                  marginTop: 8, width: '100%', padding: '12px 14px', borderRadius: 10,
-                  border: '1px solid var(--line)', background: 'var(--bg)',
-                  fontSize: 16, fontFamily: 'var(--font-mono)', color: 'var(--ink)', outline: 'none',
-                }}
+              <NameInput
+                label="아기 이름"
+                labelEn="BABY NAME · 아기 이름"
+                value={babyName}
+                onChange={setBabyName}
+                placeholder="이름 입력 (선택)"
               />
+
+              <div style={{ marginTop: 18 }}>
+                <div className="kr-en">BIRTHDAY · 생년월일</div>
+                <input
+                  type="date"
+                  value={bday}
+                  onChange={e => setBday(e.target.value)}
+                  style={{
+                    marginTop: 6, width: '100%', padding: '12px 14px', borderRadius: 10,
+                    border: '1px solid var(--line)', background: 'var(--bg)',
+                    fontSize: 16, fontFamily: 'var(--font-mono)', color: 'var(--ink)', outline: 'none',
+                  }}
+                />
+              </div>
+
               {baby && (
                 <>
                   <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
