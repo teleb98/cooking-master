@@ -1,7 +1,8 @@
 import { db } from '../_db.js';
 import { verifyToken } from '../_auth.js';
 
-const GEMINI_MODEL = 'gemini-2.0-flash';
+// gemini-1.5-flash: stable, generous free tier (15 RPM / 1500 RPD)
+const GEMINI_MODEL = 'gemini-1.5-flash';
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 function getMonday(offset = 0) {
@@ -49,7 +50,6 @@ export default async function handler(req, res) {
     const profile    = profileRes.data ?? {};
     const allRecipes = recipesRes.data ?? [];
 
-    // 식단 → 텍스트 요약
     const mealByDate = {};
     for (const m of meals) {
       if (!mealByDate[m.plan_date]) mealByDate[m.plan_date] = {};
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
       `${r.name}(${r.kcal}kcal${r.baby ? ',이유식' : ''})`
     ).join(', ');
 
-    const hasBaby   = !!profile.baby_birthday;
+    const hasBaby    = !!profile.baby_birthday;
     const babyMonths = hasBaby
       ? Math.floor((Date.now() - new Date(profile.baby_birthday)) / (1000 * 60 * 60 * 24 * 30.44))
       : null;
@@ -74,30 +74,30 @@ export default async function handler(req, res) {
 
     const systemPrompt = `당신은 한국 가족의 식단 관리를 돕는 AI 어시스턴트 'Cooking Master'입니다.
 
-## 가족 정보
-- 가족 유형: ${familyType === 'solo' ? '1인' : familyType === 'couple' ? '2인 부부' : '가족'}
-${hasBaby ? `- 아기: ${babyMonths}개월 (${babyMonths < 6 ? '초기' : babyMonths < 9 ? '중기' : babyMonths < 12 ? '후기' : '완료기'} 이유식)` : '- 아기 없음'}
-- 장보는 요일: ${['월', '화', '수', '목', '금', '토', '일'][profile.shopping_day ?? 6]}요일
+가족 정보:
+- 유형: ${familyType === 'solo' ? '1인' : familyType === 'couple' ? '2인 부부' : '가족'}
+${hasBaby ? `- 아기: ${babyMonths}개월 (${babyMonths < 6 ? '초기' : babyMonths < 9 ? '중기' : babyMonths < 12 ? '후기' : '완료기'} 이유식)` : ''}
+- 장보는 요일: ${['월','화','수','목','금','토','일'][profile.shopping_day ?? 6]}요일
 
-## 현재 2주 식단
+현재 2주 식단:
 ${planText || '식단 없음'}
 
-## 사용 가능한 레시피
+사용 가능한 레시피 목록:
 ${recipeList}
 
-## 응답 규칙
-1. 식단 변경 제안 시 반드시 위 레시피 목록에서 선택
-2. 특정 날짜/끼니 변경 제안 시 응답 마지막에 JSON 블록 포함:
+응답 규칙:
+1. 식단 변경 제안 시 반드시 위 레시피 목록에서 선택할 것
+2. 특정 날짜/끼니 변경 제안 시 응답 마지막에 아래 형식의 JSON 블록 포함:
 \`\`\`json
 {"changes":[{"plan_date":"YYYY-MM-DD","meal_type":"breakfast|lunch|dinner","menu_name":"레시피명"}]}
 \`\`\`
 3. 아기가 있으면 이유식 분기 자동 안내
-4. 친근하고 간결하게, 한국어로 답변`;
+4. 친근하고 간결하게 한국어로 답변`;
 
-    // Gemini 메시지 형식 (role: user | model)
+    // Gemini REST API — 필드명 camelCase 필수
     const contents = [
       ...history.slice(-8).map(h => ({
-        role: h.from === 'user' ? 'user' : 'model',
+        role:  h.from === 'user' ? 'user' : 'model',
         parts: [{ text: h.text }],
       })),
       { role: 'user', parts: [{ text: message }] },
@@ -107,10 +107,10 @@ ${recipeList}
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
+        systemInstruction: { parts: [{ text: systemPrompt }] },   // camelCase
         contents,
-        generation_config: { max_output_tokens: 1024, temperature: 0.7 },
-        safety_settings: [
+        generationConfig: { maxOutputTokens: 1024, temperature: 0.7 }, // camelCase
+        safetySettings: [                                              // camelCase
           { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
@@ -121,23 +121,37 @@ ${recipeList}
 
     if (!geminiRes.ok) {
       const errBody = await geminiRes.json().catch(() => ({}));
-      console.error('[ai/chat] Gemini error', geminiRes.status, errBody);
-      const status = geminiRes.status;
-      if (status === 429) return res.status(429).json({ error: 'AI 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' });
-      if (status === 400) return res.status(400).json({ error: 'AI 요청 오류입니다. 다시 시도해주세요.' });
-      return res.status(502).json({ error: 'AI 응답 중 오류가 발생했습니다.' });
+      const geminiMsg = errBody?.error?.message ?? '';
+      const status   = geminiRes.status;
+      console.error(`[ai/chat] Gemini ${status}:`, geminiMsg || JSON.stringify(errBody));
+
+      if (status === 429) {
+        return res.status(429).json({ error: 'AI 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' });
+      }
+      if (status === 400) {
+        return res.status(400).json({ error: `AI 요청 오류: ${geminiMsg || '다시 시도해주세요.'}` });
+      }
+      if (status === 403) {
+        console.error('[ai/chat] API key invalid or quota exceeded');
+        return res.status(503).json({ error: 'AI 서비스 인증 오류입니다. 관리자에게 문의하세요.' });
+      }
+      return res.status(502).json({ error: `AI 응답 오류 (${status}). 잠시 후 다시 시도해주세요.` });
     }
 
     const geminiData = await geminiRes.json();
-    const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    const candidate  = geminiData.candidates?.[0];
 
+    // 안전 필터 등으로 응답 차단된 경우
+    if (!candidate || candidate.finishReason === 'SAFETY') {
+      console.error('[ai/chat] blocked, finishReason:', candidate?.finishReason);
+      return res.status(200).json({ text: '해당 요청은 처리할 수 없습니다. 다른 방식으로 질문해주세요.', changes: null });
+    }
+
+    const text = candidate.content?.parts?.[0]?.text ?? '';
     if (!text) {
-      const reason = geminiData.candidates?.[0]?.finishReason;
-      console.error('[ai/chat] empty response, finishReason:', reason);
       return res.status(502).json({ error: 'AI가 응답을 생성하지 못했습니다. 다시 시도해주세요.' });
     }
 
-    // JSON 변경 블록 파싱
     const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
     let changes = null;
     if (jsonMatch) {
@@ -145,10 +159,10 @@ ${recipeList}
     }
 
     const displayText = text.replace(/```json[\s\S]*?```/g, '').trim();
-
     return res.json({ text: displayText, changes });
+
   } catch (err) {
-    console.error('[ai/chat]', err.message);
+    console.error('[ai/chat] unexpected error:', err.message);
     return res.status(500).json({ error: 'AI 응답 중 오류가 발생했습니다.' });
   }
 }
