@@ -4,7 +4,7 @@ import Icon from '../icons';
 const TABS = [
   { path: '/',         label: '식단',   icon: s => Icon.calendar(s) },
   { path: '/grocery',  label: '장보기',  icon: s => Icon.cart(s) },
-  { path: '/profile',  label: '가족',   icon: s => Icon.user(s) },
+  { path: '/profile',  label: '설정',   icon: s => Icon.settings(s) },
 ];
 
 export default function BottomNav() {
