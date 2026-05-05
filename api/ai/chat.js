@@ -1,8 +1,8 @@
 import { db } from '../_db.js';
 import { verifyToken } from '../_auth.js';
 
-// gemini-1.5-flash: stable, generous free tier (15 RPM / 1500 RPD)
-const GEMINI_MODEL = 'gemini-1.5-flash';
+// gemini-2.5-flash: latest stable flash model, confirmed working
+const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 function getMonday(offset = 0) {
@@ -72,12 +72,28 @@ export default async function handler(req, res) {
       : null;
     const familyType = profile.family_type ?? 'couple';
 
+    // 가족 유형별 식단 제안 가이드라인
+    const familyGuide = familyType === 'solo'
+      ? `1인 사용자입니다.
+- 1인분으로 먹기 좋은 소용량 레시피를 우선 추천합니다.
+- 식재료 낭비를 줄이는 메뉴 조합을 제안합니다 (예: 오늘 남은 재료를 내일 활용).
+- 간편하게 준비할 수 있는 메뉴를 선호합니다.`
+      : familyType === 'couple'
+      ? `2인 커플입니다.
+- 두 사람이 함께 먹기 좋은 2인분 기준 레시피를 추천합니다.
+- 다양한 맛과 영양 균형을 고려한 메뉴를 제안합니다.`
+      : `아이가 있는 가족입니다.
+- 어른과 아이 모두 먹을 수 있는 레시피를 우선 추천합니다.
+${hasBaby ? `- 아기(${babyMonths}개월, ${babyMonths < 6 ? '초기' : babyMonths < 9 ? '중기' : babyMonths < 12 ? '후기' : '완료기'} 이유식)에 맞는 이유식 분기를 자동 안내합니다.` : ''}
+- 영양 균형과 아이 친화적 식재료를 고려합니다.`;
+
     const systemPrompt = `당신은 한국 가족의 식단 관리를 돕는 AI 어시스턴트 'Cooking Master'입니다.
 
 가족 정보:
-- 유형: ${familyType === 'solo' ? '1인' : familyType === 'couple' ? '2인 부부' : '가족'}
-${hasBaby ? `- 아기: ${babyMonths}개월 (${babyMonths < 6 ? '초기' : babyMonths < 9 ? '중기' : babyMonths < 12 ? '후기' : '완료기'} 이유식)` : ''}
+- 유형: ${familyType === 'solo' ? '1인' : familyType === 'couple' ? '2인 커플' : '가족'}
 - 장보는 요일: ${['월','화','수','목','금','토','일'][profile.shopping_day ?? 6]}요일
+
+${familyGuide}
 
 현재 2주 식단:
 ${planText || '식단 없음'}
@@ -91,8 +107,9 @@ ${recipeList}
 \`\`\`json
 {"changes":[{"plan_date":"YYYY-MM-DD","meal_type":"breakfast|lunch|dinner","menu_name":"레시피명"}]}
 \`\`\`
-3. 아기가 있으면 이유식 분기 자동 안내
-4. 친근하고 간결하게 한국어로 답변`;
+3. 1인 사용자에게는 특히 간편하고 소량으로 만들기 좋은 메뉴를 강조
+4. 아기가 있으면 이유식 분기 자동 안내
+5. 친근하고 간결하게 한국어로 답변`;
 
     // Gemini REST API — 필드명 camelCase 필수
     const contents = [

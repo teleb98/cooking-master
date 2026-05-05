@@ -74,24 +74,25 @@ const SKIP = () => { localStorage.setItem('cookingMaster_onboarded', '1'); };
 
 export default function OnboardingScreen() {
   const { accent } = useApp();
-  const { saveProfile } = useFamily();
+  const { saveProfile, profile } = useFamily();
   const { user } = useAuth();
   const navigate = useNavigate();
-
-  const [step, setStep]             = useState(0);
-  const [type, setType]             = useState('couple');
-  const [partnerName, setPartnerName] = useState('');
-  const [babyName, setBabyName]     = useState('');
-  const [shopday, setShopday]       = useState(6);
-  const [saving, setSaving]         = useState(false);
-  const [errMsg, setErrMsg]         = useState('');
 
   const defaultBday = (() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 8);
     return d.toISOString().slice(0, 10);
   })();
-  const [bday, setBday] = useState(defaultBday);
+
+  // Pre-populate with existing profile values so editing doesn't reset everything
+  const [step, setStep]               = useState(0);
+  const [type, setType]               = useState(profile.family_type ?? 'couple');
+  const [partnerName, setPartnerName] = useState(profile.partner_name ?? '');
+  const [babyName, setBabyName]       = useState(profile.baby_name ?? '');
+  const [shopday, setShopday]         = useState(profile.shopping_day ?? 6);
+  const [bday, setBday]               = useState(profile.baby_birthday ?? defaultBday);
+  const [saving, setSaving]           = useState(false);
+  const [errMsg, setErrMsg]           = useState('');
 
   // Active steps depend on type selection
   const steps = useMemo(() => {

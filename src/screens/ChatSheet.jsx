@@ -106,7 +106,10 @@ export default function ChatSheet() {
         body: JSON.stringify({ message: text, history }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw Object.assign(new Error(errData.error ?? `HTTP ${res.status}`), { status: res.status });
+      }
       const data = await res.json();
 
       setMessages(prev => prev.filter(m => m.kind !== 'thinking').concat([
@@ -114,9 +117,12 @@ export default function ChatSheet() {
       ]));
       historyRef.current = [...historyRef.current, { from: 'user', text }, { from: 'ai', text: data.text }];
     } catch (err) {
-      const msg = err.message.includes('429')
-        ? 'AI 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.'
-        : '죄송해요, 일시적인 오류입니다. 잠시 후 다시 시도해주세요.';
+      const status = err.status ?? 0;
+      const msg = status === 429
+        ? 'AI 요청이 너무 많습니다. 1분 후 다시 시도해주세요.'
+        : status === 503
+        ? 'AI 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해주세요.'
+        : err.message || '죄송해요, 일시적인 오류입니다. 잠시 후 다시 시도해주세요.';
       setMessages(prev => prev.filter(m => m.kind !== 'thinking').concat([
         { from: 'ai', kind: 'text', text: msg },
       ]));

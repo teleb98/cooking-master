@@ -70,7 +70,7 @@ export default function ProfileScreen() {
       background: 'var(--bg)', minHeight: '100%',
       padding: 'calc(env(safe-area-inset-top, 12px) + 12px) 18px calc(var(--nav-h) + env(safe-area-inset-bottom, 20px))',
     }}>
-      <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em', marginBottom: 20 }}>가족 설정</div>
+      <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em', marginBottom: 20 }}>설정</div>
 
       {/* 로그인 계정 카드 */}
       {user && (
