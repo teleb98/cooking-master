@@ -1,8 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { db } from '../_db.js';
 import { verifyToken } from '../_auth.js';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 function getMonday(offset = 0) {
   const today = new Date();
@@ -31,8 +31,11 @@ export default async function handler(req, res) {
   const { message, history = [] } = req.body ?? {};
   if (!message?.trim()) return res.status(400).json({ error: 'message required' });
 
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'AI 서비스가 설정되지 않았습니다.' });
+
   try {
-    const week1 = getMonday(0);
+    const week1   = getMonday(0);
     const weekEnd = addDays(getMonday(1), 6);
 
     const [mealsRes, profileRes, recipesRes] = await Promise.all([
@@ -42,8 +45,8 @@ export default async function handler(req, res) {
       db.supabase.from('recipes').select('name, kcal, baby, tags').order('name'),
     ]);
 
-    const meals = mealsRes.data ?? [];
-    const profile = profileRes.data ?? {};
+    const meals      = mealsRes.data ?? [];
+    const profile    = profileRes.data ?? {};
     const allRecipes = recipesRes.data ?? [];
 
     // 식단 → 텍스트 요약
@@ -63,7 +66,7 @@ export default async function handler(req, res) {
       `${r.name}(${r.kcal}kcal${r.baby ? ',이유식' : ''})`
     ).join(', ');
 
-    const hasBaby = !!profile.baby_birthday;
+    const hasBaby   = !!profile.baby_birthday;
     const babyMonths = hasBaby
       ? Math.floor((Date.now() - new Date(profile.baby_birthday)) / (1000 * 60 * 60 * 24 * 30.44))
       : null;
@@ -91,19 +94,48 @@ ${recipeList}
 3. 아기가 있으면 이유식 분기 자동 안내
 4. 친근하고 간결하게, 한국어로 답변`;
 
-    const apiMessages = [
-      ...history.slice(-8).map(h => ({ role: h.from === 'user' ? 'user' : 'assistant', content: h.text })),
-      { role: 'user', content: message },
+    // Gemini 메시지 형식 (role: user | model)
+    const contents = [
+      ...history.slice(-8).map(h => ({
+        role: h.from === 'user' ? 'user' : 'model',
+        parts: [{ text: h.text }],
+      })),
+      { role: 'user', parts: [{ text: message }] },
     ];
 
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: apiMessages,
+    const geminiRes = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generation_config: { max_output_tokens: 1024, temperature: 0.7 },
+        safety_settings: [
+          { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+          { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+        ],
+      }),
     });
 
-    const text = response.content[0]?.text ?? '';
+    if (!geminiRes.ok) {
+      const errBody = await geminiRes.json().catch(() => ({}));
+      console.error('[ai/chat] Gemini error', geminiRes.status, errBody);
+      const status = geminiRes.status;
+      if (status === 429) return res.status(429).json({ error: 'AI 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' });
+      if (status === 400) return res.status(400).json({ error: 'AI 요청 오류입니다. 다시 시도해주세요.' });
+      return res.status(502).json({ error: 'AI 응답 중 오류가 발생했습니다.' });
+    }
+
+    const geminiData = await geminiRes.json();
+    const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+
+    if (!text) {
+      const reason = geminiData.candidates?.[0]?.finishReason;
+      console.error('[ai/chat] empty response, finishReason:', reason);
+      return res.status(502).json({ error: 'AI가 응답을 생성하지 못했습니다. 다시 시도해주세요.' });
+    }
 
     // JSON 변경 블록 파싱
     const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
@@ -112,15 +144,11 @@ ${recipeList}
       try { changes = JSON.parse(jsonMatch[1]).changes ?? null; } catch { /* ignore */ }
     }
 
-    // 표시용 텍스트 (JSON 블록 제거)
     const displayText = text.replace(/```json[\s\S]*?```/g, '').trim();
 
     return res.json({ text: displayText, changes });
   } catch (err) {
     console.error('[ai/chat]', err.message);
-    if (err.message?.includes('credit')) {
-      return res.status(402).json({ error: 'AI 크레딧이 부족합니다. 관리자에게 문의하세요.' });
-    }
     return res.status(500).json({ error: 'AI 응답 중 오류가 발생했습니다.' });
   }
 }
