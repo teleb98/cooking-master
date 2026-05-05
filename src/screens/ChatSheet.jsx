@@ -49,7 +49,7 @@ function MessageBubble({ m, accent, onApply }) {
 }
 
 export default function ChatSheet() {
-  const { chatOpen, setChatOpen, accent } = useApp();
+  const { chatOpen, setChatOpen, accent, bumpMealVersion } = useApp();
   const { family } = useFamily();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState([]);
@@ -82,10 +82,11 @@ export default function ChatSheet() {
         })
       )
     );
-    const ok = results.filter(r => r.status === 'fulfilled').length;
+    const ok = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
+    if (ok > 0) bumpMealVersion();
     setMessages(prev => [...prev, {
       from: 'ai', kind: 'text',
-      text: `✅ ${ok}개 식단을 업데이트했어요! 캘린더를 새로고침하면 반영됩니다.`,
+      text: `✅ ${ok}개 식단을 업데이트했어요!`,
     }]);
   };
 

@@ -150,7 +150,7 @@ export default function GroceryScreen() {
         <button onClick={() => navigate(-1)} style={{ color: 'var(--ink-2)' }}>{Icon.back(20)}</button>
         <div style={{ textAlign: 'center', flex: 1 }}>
           <div style={{ fontSize: 15, fontWeight: 700 }}>장바구니</div>
-          <div className="kr-en" style={{ marginTop: 1 }}>Grocery list · Week 1</div>
+          <div className="kr-en" style={{ marginTop: 1 }}>Grocery list · 이번 주</div>
         </div>
         <button onClick={generate} disabled={generating} style={{ color: generating ? 'var(--ink-4)' : 'var(--ink-2)' }}>
           {generating ? (

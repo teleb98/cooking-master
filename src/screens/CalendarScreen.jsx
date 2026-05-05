@@ -131,7 +131,7 @@ export default function CalendarScreen() {
   const [loading, setLoading] = useState(true);
   const [picker, setPicker] = useState(null);
 
-  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot } = useApp();
+  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion } = useApp();
   const { family } = useFamily();
   const navigate = useNavigate();
 
@@ -157,7 +157,7 @@ export default function CalendarScreen() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [weekStart]);
+  }, [weekStart, mealVersion]);
 
   // RecipeSheet "교체" 버튼 → replaceSlot 감지해서 picker 열기
   useEffect(() => {
