@@ -8,6 +8,119 @@ const TOKEN_KEY = 'cookingMaster_token';
 
 const QUICK_REPLIES = ['이번 주 다시 추천해줘', '고기 요리 줄여줘', '아기 이유식 추천해줘', '재료 적은 메뉴로'];
 
+const MEAL_KR = { breakfast: '아침', lunch: '점심', dinner: '저녁' };
+const DAY_KR  = ['일', '월', '화', '수', '목', '금', '토'];
+
+/* ── 개별 변경 선택 컴포넌트 ─────────────────────────────────── */
+function ChangeSelector({ changes, accent, onApply }) {
+  const [selected, setSelected] = useState(() => new Set(changes.map((_, i) => i)));
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied]   = useState(false);
+
+  const toggle = (i) => {
+    if (applied) return;
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  };
+
+  const handleApply = async () => {
+    const toApply = changes.filter((_, i) => selected.has(i));
+    if (!toApply.length || applying) return;
+    setApplying(true);
+    const ok = await onApply(toApply);
+    setApplied(ok);
+    setApplying(false);
+  };
+
+  const selectedCount = selected.size;
+
+  return (
+    <div style={{
+      border: `1px solid ${applied ? 'var(--line)' : accent}`,
+      borderRadius: 12, overflow: 'hidden',
+      opacity: applied ? 0.65 : 1,
+      transition: 'opacity 300ms',
+    }}>
+      {changes.map((c, i) => {
+        const d = new Date(c.plan_date + 'T00:00:00');
+        const dayKr = DAY_KR[d.getDay()];
+        const isChecked = selected.has(i);
+        return (
+          <div
+            key={i}
+            onClick={() => toggle(i)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '11px 12px',
+              borderTop: i === 0 ? 'none' : '1px solid var(--line-soft)',
+              background: isChecked && !applied ? `${accent}0D` : 'var(--surface)',
+              cursor: applied ? 'default' : 'pointer',
+              transition: 'background 120ms',
+            }}
+          >
+            {/* 체크박스 */}
+            <div style={{
+              width: 20, height: 20, borderRadius: 5, flexShrink: 0,
+              background: applied ? 'var(--baby)' : isChecked ? accent : 'transparent',
+              border: applied || isChecked ? 'none' : '1.5px solid var(--line)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 120ms',
+            }}>
+              {(isChecked || applied) && Icon.check(11)}
+            </div>
+
+            {/* 내용 */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--ink-3)', marginBottom: 1 }}>
+                {c.plan_date.slice(5).replace('-', '/')} ({dayKr}) · {MEAL_KR[c.meal_type] ?? c.meal_type}
+              </div>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {c.menu_name}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+
+      {/* 적용 버튼 */}
+      <div style={{ padding: '10px 12px', borderTop: '1px solid var(--line-soft)', background: 'var(--bg)' }}>
+        {applied ? (
+          <div style={{ fontSize: 12.5, color: 'var(--ink-3)', textAlign: 'center', padding: '4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <span style={{ color: 'var(--baby)' }}>{Icon.check(13)}</span>
+            캘린더에 반영되었어요
+          </div>
+        ) : (
+          <button
+            onClick={handleApply}
+            disabled={selectedCount === 0 || applying}
+            style={{
+              width: '100%', padding: '11px 0', borderRadius: 9,
+              background: selectedCount > 0 ? accent : 'var(--ink-4)',
+              color: '#fff', fontSize: 13, fontWeight: 700,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              transition: 'background 150ms',
+            }}
+          >
+            {applying ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                  <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite"/>
+                </path>
+              </svg>
+            ) : Icon.check(13)}
+            {applying ? '적용 중…' : `선택한 메뉴 적용 (${selectedCount}/${changes.length})`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── 메시지 버블 ──────────────────────────────────────────────── */
 function MessageBubble({ m, accent, onApply }) {
   if (m.kind === 'thinking') {
     return (
@@ -27,41 +140,34 @@ function MessageBubble({ m, accent, onApply }) {
     );
   }
 
-  // AI message — strip JSON code block for display
   const displayText = m.text.replace(/```json[\s\S]*?```/g, '').trim();
 
   return (
-    <div style={{ alignSelf: 'flex-start', maxWidth: '88%', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ background: 'var(--bg-2)', padding: '10px 14px', borderRadius: '16px 16px 16px 4px', color: 'var(--ink)', fontSize: 13.5, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
+    <div style={{ alignSelf: 'flex-start', maxWidth: '92%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ background: 'var(--bg-2)', padding: '10px 14px', borderRadius: '16px 16px 16px 4px', color: 'var(--ink)', fontSize: 13.5, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
         {displayText || (m.streaming ? '...' : '')}
       </div>
       {m.changes?.length > 0 && (
-        <button onClick={() => onApply(m.changes)} style={{
-          alignSelf: 'flex-start', padding: '9px 16px', borderRadius: 10,
-          background: accent, color: '#fff', fontSize: 13, fontWeight: 700,
-          boxShadow: `0 4px 12px ${accent}4D`,
-        }}>
-          {Icon.check(13)} 식단에 적용하기 ({m.changes.length}건)
-        </button>
+        <ChangeSelector changes={m.changes} accent={accent} onApply={onApply} />
       )}
     </div>
   );
 }
 
+/* ── 메인 컴포넌트 ────────────────────────────────────────────── */
 export default function ChatSheet() {
   const { chatOpen, setChatOpen, accent, bumpMealVersion } = useApp();
   const { family } = useFamily();
-  const [input, setInput] = useState('');
+  const [input, setInput]     = useState('');
   const [messages, setMessages] = useState([]);
-  const [sending, setSending] = useState(false);
-  const bottomRef = useRef(null);
-  const historyRef = useRef([]); // track non-streaming history for API
+  const [sending, setSending]  = useState(false);
+  const bottomRef  = useRef(null);
+  const historyRef = useRef([]);
 
   useEffect(() => {
     if (chatOpen) {
       const greeting = `안녕하세요 ${family.name}! 이번 주 식단 어떻게 도와드릴까요?`;
-      const init = [{ from: 'ai', kind: 'text', text: greeting }];
-      setMessages(init);
+      setMessages([{ from: 'ai', kind: 'text', text: greeting }]);
       historyRef.current = [{ from: 'ai', text: greeting }];
       setInput('');
     }
@@ -71,6 +177,7 @@ export default function ChatSheet() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // 선택한 변경만 적용 — ChangeSelector에서 호출, 성공 건수 반환
   const applyChanges = async (changes) => {
     const token = localStorage.getItem(TOKEN_KEY);
     const results = await Promise.allSettled(
@@ -84,10 +191,7 @@ export default function ChatSheet() {
     );
     const ok = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
     if (ok > 0) bumpMealVersion();
-    setMessages(prev => [...prev, {
-      from: 'ai', kind: 'text',
-      text: `✅ ${ok}개 식단을 업데이트했어요!`,
-    }]);
+    return ok;
   };
 
   const send = async (text) => {
@@ -95,7 +199,10 @@ export default function ChatSheet() {
     setSending(true);
     setInput('');
 
-    setMessages(prev => [...prev, { from: 'user', kind: 'text', text }, { from: 'ai', kind: 'thinking' }]);
+    setMessages(prev => [...prev,
+      { from: 'user', kind: 'text', text },
+      { from: 'ai',  kind: 'thinking' },
+    ]);
     const history = historyRef.current.slice(-8);
 
     try {
@@ -134,10 +241,13 @@ export default function ChatSheet() {
   return (
     <Sheet open={chatOpen} onClose={() => setChatOpen(false)} title="Cooking Master AI" subtitle="자연어로 식단을 바꾸세요">
       <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '8px 16px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {messages.map((m, i) => <MessageBubble key={m.id ?? i} m={m} accent={accent} onApply={applyChanges} />)}
+        {messages.map((m, i) => (
+          <MessageBubble key={m.id ?? i} m={m} accent={accent} onApply={applyChanges} />
+        ))}
         <div ref={bottomRef} />
       </div>
 
+      {/* 빠른 답변 */}
       <div className="no-scrollbar" style={{ padding: '4px 16px 6px', display: 'flex', gap: 6, overflowX: 'auto' }}>
         {QUICK_REPLIES.map(q => (
           <button key={q} onClick={() => send(q)} disabled={sending} style={{
@@ -150,6 +260,7 @@ export default function ChatSheet() {
         ))}
       </div>
 
+      {/* 입력창 */}
       <div style={{ borderTop: '1px solid var(--line)', padding: '10px 14px 14px', display: 'flex', gap: 8, alignItems: 'center', background: 'var(--surface)' }}>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 999, padding: '10px 16px' }}>
           <input

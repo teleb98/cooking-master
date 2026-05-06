@@ -103,13 +103,14 @@ ${recipeList}
 
 응답 규칙:
 1. 식단 변경 제안 시 반드시 위 레시피 목록에서 선택할 것
-2. 특정 날짜/끼니 변경 제안 시 응답 마지막에 아래 형식의 JSON 블록 포함:
+2. 각 메뉴 제안에는 추천 이유(영양, 계절성, 재료 활용 등)를 1~2문장으로 설명
+3. 특정 날짜/끼니 변경 제안 시 응답 마지막에 아래 형식의 JSON 블록 포함:
 \`\`\`json
 {"changes":[{"plan_date":"YYYY-MM-DD","meal_type":"breakfast|lunch|dinner","menu_name":"레시피명"}]}
 \`\`\`
-3. 1인 사용자에게는 특히 간편하고 소량으로 만들기 좋은 메뉴를 강조
-4. 아기가 있으면 이유식 분기 자동 안내
-5. 친근하고 간결하게 한국어로 답변`;
+4. 1인 사용자에게는 특히 간편하고 소량으로 만들기 좋은 메뉴를 강조
+5. 아기가 있으면 이유식 분기 자동 안내
+6. 친근하고 충분한 설명과 함께 한국어로 답변 (응답이 길어도 괜찮으니 설명을 생략하지 말 것)`;
 
     // Gemini REST API — 필드명 camelCase 필수
     const contents = [
@@ -124,10 +125,14 @@ ${recipeList}
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },   // camelCase
+        systemInstruction: { parts: [{ text: systemPrompt }] },
         contents,
-        generationConfig: { maxOutputTokens: 1024, temperature: 0.7 }, // camelCase
-        safetySettings: [                                              // camelCase
+        generationConfig: {
+          maxOutputTokens: 8192,
+          temperature: 0.7,
+          thinkingConfig: { thinkingBudget: 0 }, // disable thinking to maximize text output
+        },
+        safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_NONE' },
           { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
@@ -158,10 +163,14 @@ ${recipeList}
     const geminiData = await geminiRes.json();
     const candidate  = geminiData.candidates?.[0];
 
-    // 안전 필터 등으로 응답 차단된 경우
-    if (!candidate || candidate.finishReason === 'SAFETY') {
-      console.error('[ai/chat] blocked, finishReason:', candidate?.finishReason);
+    const finishReason = candidate?.finishReason;
+
+    if (!candidate || finishReason === 'SAFETY') {
+      console.error('[ai/chat] blocked, finishReason:', finishReason);
       return res.status(200).json({ text: '해당 요청은 처리할 수 없습니다. 다른 방식으로 질문해주세요.', changes: null });
+    }
+    if (finishReason === 'MAX_TOKENS') {
+      console.error('[ai/chat] response truncated by MAX_TOKENS — increase maxOutputTokens');
     }
 
     const text = candidate.content?.parts?.[0]?.text ?? '';
