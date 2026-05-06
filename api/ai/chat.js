@@ -71,6 +71,8 @@ export default async function handler(req, res) {
       ? Math.floor((Date.now() - new Date(profile.baby_birthday)) / (1000 * 60 * 60 * 24 * 30.44))
       : null;
     const familyType = profile.family_type ?? 'couple';
+    const foodLikes  = Array.isArray(profile.food_likes) ? profile.food_likes : [];
+    const allergies  = Array.isArray(profile.allergies)  ? profile.allergies  : [];
 
     // 가족 유형별 식단 제안 가이드라인
     const familyGuide = familyType === 'solo'
@@ -87,12 +89,16 @@ export default async function handler(req, res) {
 ${hasBaby ? `- 아기(${babyMonths}개월, ${babyMonths < 6 ? '초기' : babyMonths < 9 ? '중기' : babyMonths < 12 ? '후기' : '완료기'} 이유식)에 맞는 이유식 분기를 자동 안내합니다.` : ''}
 - 영양 균형과 아이 친화적 식재료를 고려합니다.`;
 
+    const prefSection = (foodLikes.length > 0 || allergies.length > 0)
+      ? `\n사용자 취향:\n${foodLikes.length  > 0 ? `- 좋아하는 재료: ${foodLikes.join(', ')}` : ''}${allergies.length > 0 ? `\n- 알레르기·피해야 할 재료: ${allergies.join(', ')} (이 재료가 포함된 메뉴는 절대 추천하지 말 것)` : ''}`
+      : '';
+
     const systemPrompt = `당신은 한국 가족의 식단 관리를 돕는 AI 어시스턴트 'Cooking Master'입니다.
 
 가족 정보:
 - 유형: ${familyType === 'solo' ? '1인' : familyType === 'couple' ? '2인 커플' : '가족'}
 - 장보는 요일: ${['월','화','수','목','금','토','일'][profile.shopping_day ?? 6]}요일
-
+${prefSection}
 ${familyGuide}
 
 현재 2주 식단:

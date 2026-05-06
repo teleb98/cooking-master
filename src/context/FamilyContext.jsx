@@ -12,6 +12,8 @@ const DEFAULTS = {
   baby_name:     null,
   shopping_day:  6,
   partner_name:  null,
+  food_likes:    [],
+  allergies:     [],
 };
 
 const DAYS_KR = ['월', '화', '수', '목', '금', '토', '일'];
@@ -97,6 +99,9 @@ export function FamilyProvider({ children }) {
     shopping_day_kr: DAYS_KR[profile.shopping_day] ?? '일',
     // Partner
     partner_name:    profile.partner_name,
+    // Preferences
+    food_likes:      Array.isArray(profile.food_likes) ? profile.food_likes : [],
+    allergies:       Array.isArray(profile.allergies)  ? profile.allergies  : [],
   };
 
   return (
