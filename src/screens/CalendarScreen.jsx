@@ -129,9 +129,10 @@ export default function CalendarScreen() {
   const [meals, setMeals] = useState({});
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [picker, setPicker] = useState(null);
 
-  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion } = useApp();
+  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion, showToast } = useApp();
   const { family } = useFamily();
   const navigate = useNavigate();
 
@@ -147,6 +148,7 @@ export default function CalendarScreen() {
   // 주간 식단 조회
   useEffect(() => {
     setLoading(true);
+    setFetchError(false);
     apiFetch(`/meals?week_start=${weekStart}`)
       .then(d => {
         const map = {};
@@ -155,7 +157,7 @@ export default function CalendarScreen() {
         }
         setMeals(map);
       })
-      .catch(() => {})
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [weekStart, mealVersion]);
 
@@ -191,6 +193,7 @@ export default function CalendarScreen() {
       });
     } catch {
       setMeals(prev => { const n = { ...prev }; delete n[key]; return n; });
+      showToast('저장에 실패했어요. 다시 시도해주세요.');
     }
   };
 
@@ -282,6 +285,23 @@ export default function CalendarScreen() {
 
       {/* 식단 그리드 */}
       <div style={{ padding: '0 12px', flex: 1 }}>
+        {fetchError && !loading && (
+          <div style={{
+            marginBottom: 10, padding: '14px 16px', borderRadius: 14,
+            background: 'var(--warn-soft)', border: '1px solid var(--warn)',
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <span style={{ color: 'var(--warn)', flexShrink: 0 }}>{Icon.warn(18)}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>식단을 불러오지 못했어요</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>네트워크 연결을 확인해주세요</div>
+            </div>
+            <button
+              onClick={() => { setFetchError(false); setLoading(true); apiFetch(`/meals?week_start=${weekStart}`).then(d => { const map = {}; for (const m of (d.meals ?? [])) map[`${m.plan_date}_${m.meal_type}`] = m; setMeals(map); }).catch(() => setFetchError(true)).finally(() => setLoading(false)); }}
+              style={{ fontSize: 12, fontWeight: 700, color: 'var(--warn)', whiteSpace: 'nowrap', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--warn)', background: 'transparent' }}
+            >다시 시도</button>
+          </div>
+        )}
         <div style={{
           background: 'var(--surface)', borderRadius: 18, border: '1px solid var(--line)',
           padding: '10px 6px 12px', boxShadow: 'var(--shadow-sm)',

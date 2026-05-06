@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback } from 'react';
+import { createContext, useContext, useState, useCallback, useRef } from 'react';
 
 const AppContext = createContext(null);
 
@@ -13,6 +13,8 @@ export function AppProvider({ children }) {
   const [replaceSlot, setReplaceSlot] = useState(null);
   // mealVersion: incremented when meals are changed externally (e.g. AI chat apply)
   const [mealVersion, setMealVersion] = useState(0);
+  const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
 
   const setAccent = useCallback((v) => {
     setAccentState(v);
@@ -21,8 +23,14 @@ export function AppProvider({ children }) {
 
   const bumpMealVersion = useCallback(() => setMealVersion(v => v + 1), []);
 
+  const showToast = useCallback((msg, type = 'error') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ msg, type });
+    toastTimer.current = setTimeout(() => setToast(null), 3000);
+  }, []);
+
   return (
-    <AppContext.Provider value={{ accent, setAccent, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion }}>
+    <AppContext.Provider value={{ accent, setAccent, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, toast, showToast }}>
       {children}
     </AppContext.Provider>
   );

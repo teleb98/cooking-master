@@ -74,12 +74,13 @@ function DeleteWarning({ item, onClose, onDelete, accent }) {
 }
 
 export default function GroceryScreen() {
-  const { accent } = useApp();
+  const { accent, showToast } = useApp();
   const { family } = useFamily();
   const navigate = useNavigate();
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
@@ -87,9 +88,10 @@ export default function GroceryScreen() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setFetchError(false);
     apiFetch(`/grocery?week_start=${weekStart}`)
       .then(d => setItems(d.items ?? []))
-      .catch(() => {})
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [weekStart]);
 
@@ -104,6 +106,7 @@ export default function GroceryScreen() {
       await apiFetch('/grocery', { method: 'PUT', body: JSON.stringify({ id, is_bought: nextBought }) });
     } catch {
       setItems(prev => prev.map(i => i.id === id ? { ...i, is_bought: !nextBought } : i));
+      showToast('변경에 실패했어요. 다시 시도해주세요.');
     }
   };
 
@@ -113,6 +116,7 @@ export default function GroceryScreen() {
       await apiFetch('/grocery', { method: 'DELETE', body: JSON.stringify({ id }) });
     } catch {
       load();
+      showToast('삭제에 실패했어요. 다시 시도해주세요.');
     }
   };
 
@@ -122,7 +126,7 @@ export default function GroceryScreen() {
       await apiFetch('/grocery/generate', { method: 'POST', body: JSON.stringify({ week_start: weekStart }) });
       await load();
     } catch {
-      /* ignore */
+      showToast('장보기 목록 생성에 실패했어요.');
     } finally {
       setGenerating(false);
     }
@@ -184,8 +188,26 @@ export default function GroceryScreen() {
 
       {/* 목록 */}
       <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '0 14px 24px' }}>
+        {/* 에러 상태 */}
+        {fetchError && !loading && (
+          <div style={{
+            margin: '8px 0 14px', padding: '14px 16px', borderRadius: 14,
+            background: 'var(--warn-soft)', border: '1px solid var(--warn)',
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <span style={{ color: 'var(--warn)', flexShrink: 0 }}>{Icon.warn(18)}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>목록을 불러오지 못했어요</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>네트워크 연결을 확인해주세요</div>
+            </div>
+            <button onClick={load} style={{
+              fontSize: 12, fontWeight: 700, color: 'var(--warn)', whiteSpace: 'nowrap',
+              padding: '6px 12px', borderRadius: 8, border: '1px solid var(--warn)', background: 'transparent',
+            }}>다시 시도</button>
+          </div>
+        )}
         {/* 빈 상태 */}
-        {!loading && items.length === 0 && (
+        {!loading && !fetchError && items.length === 0 && (
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <div style={{ fontSize: 13, color: 'var(--ink-3)', marginBottom: 16 }}>
               이번 주 식단에서 재료를 자동으로 생성할 수 있어요

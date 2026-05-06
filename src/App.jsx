@@ -95,6 +95,28 @@ function WelcomeToast() {
   );
 }
 
+function GlobalToast() {
+  const { toast } = useApp();
+  if (!toast) return null;
+  const isSuccess = toast.type === 'success';
+  return (
+    <div style={{
+      position: 'fixed',
+      bottom: 'calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px))',
+      left: '50%', transform: 'translateX(-50%)',
+      background: isSuccess ? '#27AE60' : '#C0392B',
+      color: '#fff', padding: '11px 20px', borderRadius: 12,
+      fontSize: 13, fontWeight: 600, zIndex: 600,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+      whiteSpace: 'nowrap',
+      animation: 'toastIn 250ms cubic-bezier(0.34,1.56,0.64,1)',
+    }}>
+      {toast.msg}
+      <style>{`@keyframes toastIn { from { opacity:0; transform:translateX(-50%) translateY(8px) scale(0.92); } to { opacity:1; transform:translateX(-50%) translateY(0) scale(1); } }`}</style>
+    </div>
+  );
+}
+
 const HIDE_NAV = ['/welcome', '/login', '/onboarding'];
 
 function AppShell() {
@@ -138,6 +160,7 @@ function AppShell() {
 
       <ChatSheet />
       <RecipeSheet />
+      <GlobalToast />
 
       <Routes>
         {HIDE_NAV.map(p => <Route key={p} path={p} element={null} />)}

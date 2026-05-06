@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +21,7 @@ const PROVIDER_LABEL = {
 };
 
 const AVATAR_COLORS = ['#C8654A', '#6F8E5A', '#3F4D8A', '#C9943C'];
+const DAYS_KR = ['월', '화', '수', '목', '금', '토', '일'];
 
 function Avatar({ name, size = 44, colorIdx = 0 }) {
   return (
@@ -47,11 +49,180 @@ function MemberRow({ name, role, colorIdx }) {
   );
 }
 
+function FieldLabel({ children }) {
+  return (
+    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+      {children}
+    </div>
+  );
+}
+
+function TextInput({ value, onChange, placeholder }) {
+  return (
+    <input
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        width: '100%', padding: '12px 14px', boxSizing: 'border-box',
+        background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 12,
+        fontSize: 14, color: 'var(--ink)', outline: 'none',
+      }}
+    />
+  );
+}
+
+/* ── 가족 설정 편집 시트 ──────────────────────────────────── */
+function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
+  const [type, setType]           = useState(profile.family_type ?? 'couple');
+  const [partnerName, setPartner] = useState(profile.partner_name ?? '');
+  const [babyName, setBabyName]   = useState(profile.baby_name ?? '');
+  const [babyBday, setBabyBday]   = useState(profile.baby_birthday ?? '');
+  const [shopday, setShopday]     = useState(profile.shopping_day ?? 6);
+  const [saving, setSaving]       = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setType(profile.family_type ?? 'couple');
+      setPartner(profile.partner_name ?? '');
+      setBabyName(profile.baby_name ?? '');
+      setBabyBday(profile.baby_birthday ?? '');
+      setShopday(profile.shopping_day ?? 6);
+    }
+  }, [open, profile]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({
+      family_type:   type,
+      partner_name:  type !== 'solo' ? (partnerName || null) : null,
+      baby_name:     type === 'family' ? (babyName || null) : null,
+      baby_birthday: type === 'family' ? (babyBday || null) : null,
+      shopping_day:  shopday,
+    });
+    setSaving(false);
+    onClose();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)',
+      display: 'flex', alignItems: 'flex-end', zIndex: 300,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'var(--surface)', borderRadius: '20px 20px 0 0',
+        width: '100%', maxHeight: '90dvh',
+        display: 'flex', flexDirection: 'column',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}>
+        {/* 헤더 */}
+        <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>가족 설정</div>
+          <button onClick={onClose} style={{ color: 'var(--ink-3)' }}>{Icon.close(18)}</button>
+        </div>
+
+        {/* 폼 */}
+        <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+          {/* 가족 유형 */}
+          <div style={{ marginBottom: 22 }}>
+            <FieldLabel>가족 유형</FieldLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {[{ key: 'solo', label: '1인' }, { key: 'couple', label: '커플' }, { key: 'family', label: '가족' }].map(opt => (
+                <button key={opt.key} onClick={() => setType(opt.key)} style={{
+                  padding: '12px 0', borderRadius: 12, fontWeight: 700, fontSize: 14,
+                  background: type === opt.key ? accent : 'var(--bg)',
+                  color: type === opt.key ? '#fff' : 'var(--ink-2)',
+                  border: type === opt.key ? 'none' : '1px solid var(--line)',
+                  transition: 'background 150ms, color 150ms',
+                }}>{opt.label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* 파트너 이름 */}
+          {type !== 'solo' && (
+            <div style={{ marginBottom: 22 }}>
+              <FieldLabel>파트너 이름</FieldLabel>
+              <TextInput value={partnerName} onChange={setPartner} placeholder="파트너 이름 입력" />
+            </div>
+          )}
+
+          {/* 아기 정보 */}
+          {type === 'family' && (
+            <div style={{ marginBottom: 22 }}>
+              <FieldLabel>아기 정보 (선택)</FieldLabel>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <TextInput value={babyName} onChange={setBabyName} placeholder="아기 이름 (선택)" />
+                <input
+                  type="date"
+                  value={babyBday}
+                  onChange={e => setBabyBday(e.target.value)}
+                  style={{
+                    width: '100%', padding: '12px 14px', boxSizing: 'border-box',
+                    background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 12,
+                    fontSize: 14, color: babyBday ? 'var(--ink)' : 'var(--ink-3)', outline: 'none',
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 장보는 요일 */}
+          <div style={{ marginBottom: 8 }}>
+            <FieldLabel>장보는 요일</FieldLabel>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+              {DAYS_KR.map((d, i) => (
+                <button key={i} onClick={() => setShopday(i)} style={{
+                  padding: '11px 0', borderRadius: 10, fontWeight: 700, fontSize: 13,
+                  background: shopday === i ? accent : 'var(--bg)',
+                  color: shopday === i ? '#fff' : 'var(--ink-2)',
+                  border: shopday === i ? 'none' : '1px solid var(--line)',
+                  transition: 'background 150ms',
+                }}>{d}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* 저장/취소 */}
+        <div style={{ padding: '12px 20px 16px', borderTop: '1px solid var(--line)', display: 'flex', gap: 8 }}>
+          <button onClick={onClose} style={{
+            flex: 1, padding: '13px 0', borderRadius: 12,
+            border: '1px solid var(--line)', background: 'var(--bg)',
+            fontSize: 14, fontWeight: 600, color: 'var(--ink-2)',
+          }}>취소</button>
+          <button onClick={handleSave} disabled={saving} style={{
+            flex: 2, padding: '13px 0', borderRadius: 12,
+            background: saving ? 'var(--ink-4)' : accent,
+            color: '#fff', fontSize: 14, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            {saving && (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                  <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite"/>
+                </path>
+              </svg>
+            )}
+            {saving ? '저장 중…' : '저장'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── 메인 컴포넌트 ────────────────────────────────────────── */
 export default function ProfileScreen() {
-  const { accent, setAccent } = useApp();
+  const { accent, setAccent, showToast } = useApp();
   const { user, logout } = useAuth();
-  const { family } = useFamily();
+  const { family, profile, saveProfile } = useFamily();
   const navigate = useNavigate();
+
+  const [editOpen, setEditOpen] = useState(false);
 
   const provider = user?.provider ? PROVIDER_LABEL[user.provider] : null;
 
@@ -60,7 +231,15 @@ export default function ProfileScreen() {
     navigate('/login', { replace: true });
   };
 
-  // Build member list from real data
+  const handleSaveProfile = async (updates) => {
+    try {
+      await saveProfile(updates);
+      showToast('가족 설정이 저장되었어요', 'success');
+    } catch {
+      showToast('저장에 실패했어요. 다시 시도해주세요.');
+    }
+  };
+
   const members = [];
   if (user?.name) members.push({ name: user.name, role: 'owner', colorIdx: 0 });
   if (family.partner_name) members.push({ name: family.partner_name, role: 'partner', colorIdx: 1 });
@@ -136,7 +315,7 @@ export default function ProfileScreen() {
           </div>
         )}
 
-        {/* 타입 뱃지 */}
+        {/* 유형 뱃지 */}
         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
           {[
             { key: 'solo',   label: '1인' },
@@ -151,12 +330,12 @@ export default function ProfileScreen() {
           ))}
         </div>
 
-        <button onClick={() => navigate('/onboarding')} style={{
+        <button onClick={() => setEditOpen(true)} style={{
           marginTop: 12, width: '100%', padding: '11px 0', borderRadius: 10,
           border: '1px solid var(--line)', background: 'var(--bg)',
           fontSize: 13, fontWeight: 600, color: 'var(--ink-2)',
         }}>
-          패밀리 설정 수정
+          가족 설정 수정
         </button>
       </div>
 
@@ -196,6 +375,14 @@ export default function ProfileScreen() {
           ))}
         </div>
       </div>
+
+      <FamilyEditSheet
+        open={editOpen}
+        profile={profile}
+        accent={accent}
+        onSave={handleSaveProfile}
+        onClose={() => setEditOpen(false)}
+      />
     </div>
   );
 }
