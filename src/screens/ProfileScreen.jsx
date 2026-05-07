@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
 import Icon from '../icons';
 
+const TOKEN_KEY = 'cookingMaster_token';
+
 const PRESET_ACCENTS = [
   { name: '테라코타', value: '#C8654A' },
   { name: '세이지',   value: '#6F8E5A' },
@@ -69,6 +71,118 @@ function TextInput({ value, onChange, placeholder }) {
         fontSize: 14, color: 'var(--ink)', outline: 'none',
       }}
     />
+  );
+}
+
+/* ── 회원 탈퇴 확인 시트 ─────────────────────────────────── */
+function DeleteAccountSheet({ open, onClose, onConfirm }) {
+  const [step, setStep]       = useState('warn');   // 'warn' | 'confirm'
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (open) { setStep('warn'); setDeleting(false); }
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    await onConfirm();
+    setDeleting(false);
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      display: 'flex', alignItems: 'flex-end', zIndex: 400,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: 'var(--surface)', borderRadius: '20px 20px 0 0',
+        width: '100%',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}>
+        {/* 헤더 */}
+        <div style={{ padding: '18px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--line)' }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#C0392B' }}>회원 탈퇴</div>
+          <button onClick={onClose} style={{ color: 'var(--ink-3)' }}>{Icon.close(18)}</button>
+        </div>
+
+        <div style={{ padding: '20px 20px 24px' }}>
+          {step === 'warn' ? (
+            <>
+              {/* 경고 아이콘 */}
+              <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 20 }}>
+                <div style={{ width: 42, height: 42, borderRadius: 12, background: '#FEF2F0', color: '#C0392B', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {Icon.warn(20)}
+                </div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)', marginBottom: 4 }}>탈퇴하면 모든 데이터가 삭제됩니다</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.6 }}>삭제된 데이터는 복구할 수 없습니다.</div>
+                </div>
+              </div>
+
+              {/* 삭제 항목 목록 */}
+              <div style={{ background: 'var(--bg)', borderRadius: 12, padding: '14px 16px', marginBottom: 20 }}>
+                {[
+                  '계정 정보 (이름, 이메일)',
+                  '2주치 식단 계획 전체',
+                  '장보기 목록',
+                  '가족 구성 및 취향 설정',
+                ].map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderTop: i === 0 ? 'none' : '1px solid var(--line-soft)' }}>
+                    <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#C0392B', flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={onClose} style={{
+                  flex: 1, padding: '13px 0', borderRadius: 12,
+                  border: '1px solid var(--line)', background: 'var(--bg)',
+                  fontSize: 14, fontWeight: 600, color: 'var(--ink-2)',
+                }}>취소</button>
+                <button onClick={() => setStep('confirm')} style={{
+                  flex: 1, padding: '13px 0', borderRadius: 12,
+                  background: '#FEF2F0', border: '1px solid #F5C6C0',
+                  fontSize: 14, fontWeight: 700, color: '#C0392B',
+                }}>계속 진행</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)', marginBottom: 8 }}>정말로 탈퇴하시겠어요?</div>
+              <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.65, marginBottom: 24 }}>
+                이 작업은 되돌릴 수 없습니다. 탈퇴 후 같은 소셜 계정으로 재가입하더라도 이전 데이터는 복구되지 않습니다.
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setStep('warn')} style={{
+                  flex: 1, padding: '13px 0', borderRadius: 12,
+                  border: '1px solid var(--line)', background: 'var(--bg)',
+                  fontSize: 14, fontWeight: 600, color: 'var(--ink-2)',
+                }}>돌아가기</button>
+                <button onClick={handleDelete} disabled={deleting} style={{
+                  flex: 1, padding: '13px 0', borderRadius: 12,
+                  background: deleting ? 'var(--ink-4)' : '#C0392B',
+                  color: '#fff', fontSize: 14, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}>
+                  {deleting && (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+                      <path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite"/>
+                      </path>
+                    </svg>
+                  )}
+                  {deleting ? '탈퇴 처리 중…' : '탈퇴하기'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -222,13 +336,32 @@ export default function ProfileScreen() {
   const { family, profile, saveProfile } = useFamily();
   const navigate = useNavigate();
 
-  const [editOpen, setEditOpen] = useState(false);
+  const [editOpen,   setEditOpen]   = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const provider = user?.provider ? PROVIDER_LABEL[user.provider] : null;
 
   const handleLogout = () => {
     logout();
     navigate('/login', { replace: true });
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const res = await fetch('/api/user/delete', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      showToast('탈퇴 처리 중 오류가 발생했습니다. 다시 시도해주세요.');
+      return;
+    }
+    // 로컬 데이터 전체 삭제 후 로그인 화면으로
+    logout();
+    localStorage.clear();
+    navigate('/welcome', { replace: true });
   };
 
   const handleSaveProfile = async (updates) => {
@@ -359,7 +492,7 @@ export default function ProfileScreen() {
       </div>
 
       {/* 강조색 */}
-      <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16 }}>
+      <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
         <div className="kr-en" style={{ marginBottom: 12 }}>ACCENT COLOR · 강조색</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
           {PRESET_ACCENTS.map(p => (
@@ -376,12 +509,32 @@ export default function ProfileScreen() {
         </div>
       </div>
 
+      {/* 회원 탈퇴 */}
+      <div style={{ padding: '4px 0 8px' }}>
+        <button
+          onClick={() => setDeleteOpen(true)}
+          style={{
+            width: '100%', padding: '13px 0', borderRadius: 12,
+            border: '1px solid var(--line)', background: 'transparent',
+            fontSize: 13, fontWeight: 600, color: 'var(--ink-4)',
+          }}
+        >
+          회원 탈퇴
+        </button>
+      </div>
+
       <FamilyEditSheet
         open={editOpen}
         profile={profile}
         accent={accent}
         onSave={handleSaveProfile}
         onClose={() => setEditOpen(false)}
+      />
+
+      <DeleteAccountSheet
+        open={deleteOpen}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteAccount}
       />
     </div>
   );
