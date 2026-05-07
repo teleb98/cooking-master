@@ -2,7 +2,8 @@ import { createContext, useContext, useState, useCallback, useRef } from 'react'
 
 const AppContext = createContext(null);
 
-const ACCENT_KEY = 'cookingMaster_accent';
+const ACCENT_KEY   = 'cookingMaster_accent';
+const ONBOARD_KEY  = 'cookingMaster_onboarded';
 
 export function AppProvider({ children }) {
   const [accent, setAccentState] = useState(() => localStorage.getItem(ACCENT_KEY) ?? '#C8654A');
@@ -15,6 +16,8 @@ export function AppProvider({ children }) {
   const [mealVersion, setMealVersion] = useState(0);
   const [toast, setToast] = useState(null);
   const toastTimer = useRef(null);
+  // onboarded: React state so route re-renders reactively when flag is set
+  const [onboarded, setOnboarded] = useState(() => !!localStorage.getItem(ONBOARD_KEY));
 
   const setAccent = useCallback((v) => {
     setAccentState(v);
@@ -29,8 +32,18 @@ export function AppProvider({ children }) {
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
+  const markOnboarded = useCallback(() => {
+    localStorage.setItem(ONBOARD_KEY, '1');
+    setOnboarded(true);
+  }, []);
+
+  const clearOnboarded = useCallback(() => {
+    localStorage.removeItem(ONBOARD_KEY);
+    setOnboarded(false);
+  }, []);
+
   return (
-    <AppContext.Provider value={{ accent, setAccent, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, toast, showToast }}>
+    <AppContext.Provider value={{ accent, setAccent, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, toast, showToast, onboarded, markOnboarded, clearOnboarded }}>
       {children}
     </AppContext.Provider>
   );

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 
 /* ── 소셜 로그인 공급자 아이콘 ──────────────────────────────── */
 function GoogleIcon({ size = 22 }) {
@@ -89,6 +90,7 @@ function ErrorBanner({ msg, onClose }) {
 /* ── 메인 컴포넌트 ───────────────────────────────────────── */
 export default function LoginScreen() {
   const { loginWithToken } = useAuth();
+  const { markOnboarded } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -125,11 +127,7 @@ export default function LoginScreen() {
 
         sessionStorage.setItem('cm_welcome', JSON.stringify({ name: name || '사용자', isNew }));
 
-        // Returning users: restore onboarded flag synchronously before loginWithToken
-        // so the route at "/" sees isOnboarded()=true the moment isAuthenticated flips.
-        if (!isNew) {
-          localStorage.setItem('cookingMaster_onboarded', '1');
-        }
+        if (!isNew) markOnboarded();
 
         loginWithToken(token).catch(() => {
           setErrorMsg('로그인에 실패했습니다. 다시 시도해주세요.');

@@ -198,11 +198,8 @@ function MiniCalendar({ plan, loading, accent }) {
   );
 }
 
-/* ── 메인 컴포넌트 ───────────────────────────────────────── */
-const SKIP = () => { localStorage.setItem('cookingMaster_onboarded', '1'); };
-
 export default function OnboardingScreen() {
-  const { accent } = useApp();
+  const { accent, markOnboarded } = useApp();
   const { saveProfile, profile } = useFamily();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -303,7 +300,7 @@ export default function OnboardingScreen() {
 
     // generate 스텝 완료 (확정)
     if (currentKey === 'generate') {
-      localStorage.setItem('cookingMaster_onboarded', '1');
+      markOnboarded();
       navigate('/');
       return;
     }
@@ -342,7 +339,7 @@ export default function OnboardingScreen() {
           <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{steps[step]?.label}</div>
         </div>
         <button
-          onClick={() => { SKIP(); navigate('/'); }}
+          onClick={() => { markOnboarded(); navigate('/'); }}
           style={{ color: 'var(--ink-3)', fontSize: 13, fontWeight: 500 }}
         >건너뛰기</button>
       </div>

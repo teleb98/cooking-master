@@ -15,10 +15,6 @@ import RecipeSheet       from './screens/RecipeSheet';
 import PrivacyScreen     from './screens/PrivacyScreen';
 import DataDeletionScreen from './screens/DataDeletionScreen';
 
-function isOnboarded() {
-  return !!localStorage.getItem('cookingMaster_onboarded');
-}
-
 function RequireAuth({ children }) {
   const { isAuthenticated, authLoading } = useAuth();
   if (authLoading) return null;
@@ -120,7 +116,7 @@ function GlobalToast() {
 const HIDE_NAV = ['/welcome', '/login', '/onboarding'];
 
 function AppShell() {
-  const { accent } = useApp();
+  const { accent, onboarded } = useApp();
   const { isAuthenticated, authLoading } = useAuth();
 
   useEffect(() => {
@@ -136,9 +132,9 @@ function AppShell() {
         <Routes>
           {/* ── Smart home: auto-route by auth + onboarding state ── */}
           <Route path="/" element={
-            !isAuthenticated       ? <WelcomeScreen />                       :
-            !isOnboarded()         ? <Navigate to="/onboarding" replace />   :
-                                     <CalendarScreen />
+            !isAuthenticated ? <WelcomeScreen />                     :
+            !onboarded       ? <Navigate to="/onboarding" replace /> :
+                               <CalendarScreen />
           } />
 
           {/* ── Public (redirect to / if already logged in) ── */}

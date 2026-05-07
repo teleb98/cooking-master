@@ -6,6 +6,7 @@
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "functions": {
-    "api/ai/chat.js": { "maxDuration": 30 }
+    "api/ai/chat.js":          { "maxDuration": 60 },
+    "api/ai/generate-plan.js": { "maxDuration": 60 }
   }
 }
