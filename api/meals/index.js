@@ -22,17 +22,17 @@ const DEFAULT_PLAN = [
 
 function getMonday(weekOffset = 0) {
   const today = new Date();
-  const dow = today.getDay();
+  const dow = today.getUTCDay();
   const diff = dow === 0 ? -6 : 1 - dow;
   const mon = new Date(today);
-  mon.setDate(today.getDate() + diff + weekOffset * 7);
-  mon.setHours(0, 0, 0, 0);
+  mon.setUTCDate(today.getUTCDate() + diff + weekOffset * 7);
+  mon.setUTCHours(0, 0, 0, 0);
   return mon;
 }
 
 function addDays(date, n) {
   const d = new Date(date);
-  d.setDate(d.getDate() + n);
+  d.setUTCDate(d.getUTCDate() + n);
   return d;
 }
 

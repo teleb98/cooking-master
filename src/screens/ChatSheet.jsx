@@ -32,7 +32,7 @@ function ChangeSelector({ changes, accent, onApply, onGoGrocery }) {
     if (!toApply.length || applying) return;
     setApplying(true);
     const ok = await onApply(toApply);
-    setApplied(ok);
+    setApplied(ok > 0);
     setApplying(false);
   };
 
@@ -46,8 +46,8 @@ function ChangeSelector({ changes, accent, onApply, onGoGrocery }) {
       transition: 'opacity 300ms',
     }}>
       {changes.map((c, i) => {
-        const d = new Date(c.plan_date + 'T00:00:00');
-        const dayKr = DAY_KR[d.getDay()];
+        const d = new Date(c.plan_date); // UTC midnight (date-only string)
+        const dayKr = DAY_KR[d.getUTCDay()];
         const isChecked = selected.has(i);
         return (
           <div

@@ -23,11 +23,12 @@ async function apiFetch(path, opts = {}) {
 
 function getWeekDates(weekOffset) {
   const today = new Date();
-  const dow = today.getDay();
+  const dow = today.getUTCDay();
   const diff = dow === 0 ? -6 : 1 - dow;
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today);
-    d.setDate(today.getDate() + diff + weekOffset * 7 + i);
+    d.setUTCDate(today.getUTCDate() + diff + weekOffset * 7 + i);
+    d.setUTCHours(0, 0, 0, 0);
     return d;
   });
 }
@@ -38,7 +39,7 @@ function toDateStr(d) {
 
 function daysUntil(targetDow) {
   const today = new Date();
-  const todayDow = today.getDay() === 0 ? 6 : today.getDay() - 1; // 0=Mon
+  const todayDow = today.getUTCDay() === 0 ? 6 : today.getUTCDay() - 1; // 0=Mon, UTC
   let diff = (targetDow - todayDow + 7) % 7;
   return diff === 0 ? 7 : diff;
 }
@@ -264,9 +265,9 @@ export default function CalendarScreen() {
       <div style={{ padding: '0 18px', display: 'flex', gap: 8, marginBottom: 12 }}>
         {[0, 1].map(w => {
           const active = week === w;
-          const label = `${weekDates[0].getMonth() + 1}/${weekDates[0].getDate()}`;
+          const label = `${weekDates[0].getUTCMonth() + 1}/${weekDates[0].getUTCDate()}`;
           const dates = getWeekDates(w);
-          const rangeLabel = `${dates[0].getMonth() + 1}/${dates[0].getDate()}–${dates[6].getDate()}`;
+          const rangeLabel = `${dates[0].getUTCMonth() + 1}/${dates[0].getUTCDate()}–${dates[6].getUTCDate()}`;
           return (
             <button key={w} onClick={() => setWeek(w)} style={{
               flex: 1, height: 40, borderRadius: 12,
@@ -311,7 +312,7 @@ export default function CalendarScreen() {
           <div style={{ display: 'grid', gridTemplateColumns: '34px repeat(7, 1fr)', gap: 4, padding: '0 4px 8px' }}>
             <div />
             {weekDates.map((d, i) => {
-              const isToday = d.toDateString() === today.toDateString();
+              const isToday = d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
               return (
                 <div key={i} style={{
                   textAlign: 'center', padding: '6px 0', borderRadius: 8,
@@ -319,7 +320,7 @@ export default function CalendarScreen() {
                   color: isToday ? '#fff' : 'var(--ink-2)',
                 }}>
                   <div style={{ fontSize: 10, fontWeight: 600, opacity: isToday ? 0.85 : 0.6 }}>{DAYS_KR[i]}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{d.getDate()}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{d.getUTCDate()}</div>
                 </div>
               );
             })}
@@ -339,7 +340,7 @@ export default function CalendarScreen() {
               {weekDates.map((d, di) => {
                 const key = `${toDateStr(d)}_${mt.key}`;
                 const meal = meals[key];
-                const isToday = d.toDateString() === today.toDateString();
+                const isToday = d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
                 const highlight = isToday && mt.key === 'dinner';
                 return (
                   <button

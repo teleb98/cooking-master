@@ -22,10 +22,11 @@ async function apiFetch(path, opts = {}) {
 
 function getWeekStart() {
   const today = new Date();
-  const dow = today.getDay();
+  const dow = today.getUTCDay();
   const diff = dow === 0 ? -6 : 1 - dow;
   const mon = new Date(today);
-  mon.setDate(today.getDate() + diff);
+  mon.setUTCDate(today.getUTCDate() + diff);
+  mon.setUTCHours(0, 0, 0, 0);
   return mon.toISOString().slice(0, 10);
 }
 
@@ -138,7 +139,7 @@ export default function GroceryScreen() {
 
   // D-X until shopping day
   const today = new Date();
-  const todayDow = today.getDay() === 0 ? 6 : today.getDay() - 1;
+  const todayDow = today.getUTCDay() === 0 ? 6 : today.getUTCDay() - 1;
   let dUntil = (family.shopping_day - todayDow + 7) % 7;
   if (dUntil === 0) dUntil = 7;
 

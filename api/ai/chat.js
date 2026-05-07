@@ -7,16 +7,17 @@ const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${
 
 function getMonday(offset = 0) {
   const today = new Date();
-  const dow = today.getDay();
+  const dow = today.getUTCDay();
   const diff = dow === 0 ? -6 : 1 - dow;
   const mon = new Date(today);
-  mon.setDate(today.getDate() + diff + offset * 7);
+  mon.setUTCDate(today.getUTCDate() + diff + offset * 7);
+  mon.setUTCHours(0, 0, 0, 0);
   return mon.toISOString().slice(0, 10);
 }
 
 function addDays(dateStr, n) {
   const d = new Date(dateStr);
-  d.setDate(d.getDate() + n);
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
 

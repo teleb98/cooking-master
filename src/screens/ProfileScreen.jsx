@@ -407,7 +407,7 @@ export default function ProfileScreen() {
       return;
     }
     // 로컬 데이터 전체 삭제 후 로그인 화면으로
-    logout();
+    await logout();
     localStorage.clear();
     navigate('/welcome', { replace: true });
   };

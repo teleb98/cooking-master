@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     if (!week_start) return res.status(400).json({ error: 'week_start required' });
 
     const weekEnd = new Date(week_start);
-    weekEnd.setDate(weekEnd.getDate() + 6);
+    weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);
     const weekEndStr = weekEnd.toISOString().slice(0, 10);
 
     // Get all meals for the week

@@ -112,14 +112,15 @@ function calcBaby(bday) {
 function MiniCalendar({ plan, loading, accent }) {
   const MEAL_TYPES = ['breakfast', 'lunch', 'dinner'];
   const today = new Date();
-  const dow = today.getDay() === 0 ? 6 : today.getDay() - 1;
+  const dow = today.getUTCDay() === 0 ? 6 : today.getUTCDay() - 1;
   const monday = new Date(today);
-  monday.setDate(today.getDate() - dow);
+  monday.setUTCDate(today.getUTCDate() - dow);
+  monday.setUTCHours(0, 0, 0, 0);
 
   const weeks = [0, 1].map(w =>
     Array.from({ length: 7 }, (_, i) => {
       const d = new Date(monday);
-      d.setDate(monday.getDate() + w * 7 + i);
+      d.setUTCDate(monday.getUTCDate() + w * 7 + i);
       return d.toISOString().slice(0, 10);
     })
   );
