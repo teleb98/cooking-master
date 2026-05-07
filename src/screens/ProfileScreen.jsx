@@ -349,7 +349,7 @@ export default function ProfileScreen() {
   const handleDeleteAccount = async () => {
     try {
       const token = localStorage.getItem(TOKEN_KEY);
-      const res = await fetch('/api/user/delete', {
+      const res = await fetch('/api/user/profile', {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });

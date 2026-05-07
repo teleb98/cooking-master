@@ -35,6 +35,16 @@ export default async function handler(req, res) {
       return res.json({ profile });
     }
 
+    if (req.method === 'DELETE') {
+      await Promise.all([
+        db.supabase.from('meal_plans').delete().eq('user_id', uid),
+        db.supabase.from('grocery_items').delete().eq('user_id', uid),
+      ]);
+      await db.supabase.from('user_profiles').delete().eq('user_id', uid);
+      await db.supabase.from('users').delete().eq('id', uid);
+      return res.json({ ok: true });
+    }
+
     return res.status(405).end();
   } catch (err) {
     console.error('[user/profile]', err.message);
