@@ -133,9 +133,9 @@ function AppShell() {
         <Routes>
           {/* ── Smart home: auto-route by auth + onboarding state ── */}
           <Route path="/" element={
-            !isAuthenticated ? <WelcomeScreen />                     :
-            !onboarded       ? <Navigate to="/onboarding" replace /> :
-                               <CalendarScreen />
+            !isAuthenticated                                                    ? <WelcomeScreen />                     :
+            !onboarded && !localStorage.getItem('cookingMaster_onboarded')     ? <Navigate to="/onboarding" replace /> :
+                                                                                  <CalendarScreen />
           } />
 
           {/* ── Public (redirect to / if already logged in) ── */}

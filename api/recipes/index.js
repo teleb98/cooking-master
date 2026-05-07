@@ -4,7 +4,16 @@ import { verifyToken } from '../_auth.js';
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
+const BASE_SELECT   = 'name, kcal, baby, baby_note, tags, ingredients';
 const DETAIL_SELECT = 'name, kcal, baby, baby_note, tags, ingredients, steps, prep_time, cook_time, serving, tips, nutrition';
+
+async function selectRecipe(supabase, name) {
+  // 신규 컬럼 포함 조회 시도, 컬럼 없으면 기본 컬럼으로 fallback
+  const full = await supabase.from('recipes').select(DETAIL_SELECT).eq('name', name).maybeSingle();
+  if (!full.error) return full;
+  const base = await supabase.from('recipes').select(BASE_SELECT).eq('name', name).maybeSingle();
+  return base;
+}
 
 async function generateDetail(recipe) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -85,11 +94,7 @@ export default async function handler(req, res) {
     if (!name) return res.status(400).json({ error: 'name required' });
 
     try {
-      const { data: recipe, error } = await db.supabase
-        .from('recipes')
-        .select(DETAIL_SELECT)
-        .eq('name', name)
-        .maybeSingle();
+      const { data: recipe, error } = await selectRecipe(db.supabase, name);
       if (error) throw error;
       if (!recipe) return res.status(404).json({ error: '레시피를 찾을 수 없습니다.' });
 
@@ -118,11 +123,7 @@ export default async function handler(req, res) {
     const { name } = req.query;
 
     if (name) {
-      const { data, error } = await db.supabase
-        .from('recipes')
-        .select(DETAIL_SELECT)
-        .eq('name', name)
-        .maybeSingle();
+      const { data, error } = await selectRecipe(db.supabase, name);
       if (error) throw error;
       return res.json({ recipe: data ?? null });
     }

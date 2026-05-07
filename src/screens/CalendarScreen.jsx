@@ -199,19 +199,20 @@ export default function CalendarScreen() {
     const { plan_date, meal_type } = picker;
     setPicker(null);
     const key = `${plan_date}_${meal_type}`;
+    // 낙관적 업데이트 + 레시피 즉시 표시 (await 전에 실행)
     setMeals(prev => ({
       ...prev,
       [key]: { plan_date, meal_type, menu_name: selectedRecipe.name, kcal: selectedRecipe.kcal, is_baby: selectedRecipe.baby },
     }));
+    setRecipe({ name: selectedRecipe.name, plan_date, meal_type });
     try {
       await apiFetch('/meals', {
         method: 'PUT',
         body: JSON.stringify({ plan_date, meal_type, menu_name: selectedRecipe.name }),
       });
-      // 선택 후 레시피 상세 자동 표시
-      setRecipe({ name: selectedRecipe.name, plan_date, meal_type });
     } catch {
       setMeals(prev => { const n = { ...prev }; delete n[key]; return n; });
+      setRecipe(null);
       showToast('저장에 실패했어요. 다시 시도해주세요.');
     }
   };
