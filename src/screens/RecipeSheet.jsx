@@ -189,13 +189,14 @@ export default function RecipeSheet() {
     setReplaceSlot(slot);
   };
 
-  const mealLabel = recipe?.meal_type === 'breakfast' ? '아침' : recipe?.meal_type === 'lunch' ? '점심' : '저녁';
+  const MEAL_LABEL = { breakfast: '아침', lunch: '점심', dinner: '저녁' };
+  const mealLabel = recipe?.meal_type ? MEAL_LABEL[recipe.meal_type] : null;
   const totalTime = info ? ((info.prep_time ?? 0) + (info.cook_time ?? 0)) : 0;
 
   const subtitle = baseLoading
     ? '불러오는 중...'
     : info
-      ? `${info.kcal ?? '?'} kcal · ${mealLabel}`
+      ? [info.kcal ? `${info.kcal} kcal` : null, mealLabel].filter(Boolean).join(' · ')
       : '';
 
   return (
@@ -292,15 +293,17 @@ export default function RecipeSheet() {
 
             {/* 액션 버튼 */}
             <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
-              <button
-                onClick={handleReplace}
-                style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}
-              >
-                메뉴 교체
-              </button>
+              {recipe?.plan_date && (
+                <button
+                  onClick={handleReplace}
+                  style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}
+                >
+                  메뉴 교체
+                </button>
+              )}
               <button
                 onClick={() => setRecipe(null)}
-                style={{ flex: 1, padding: '13px 0', borderRadius: 12, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}
+                style={{ flex: recipe?.plan_date ? 1 : undefined, width: recipe?.plan_date ? undefined : '100%', padding: '13px 0', borderRadius: 12, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}
               >
                 확인
               </button>

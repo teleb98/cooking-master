@@ -133,7 +133,10 @@ export default function GroceryScreen() {
     }
   };
 
-  const groups = groupByCategory(items);
+  const groups = groupByCategory(items).map(g => ({
+    ...g,
+    items: [...g.items].sort((a, b) => (a.is_bought ? 1 : 0) - (b.is_bought ? 1 : 0)),
+  }));
   const total = items.length;
   const done = items.filter(i => i.is_bought).length;
 

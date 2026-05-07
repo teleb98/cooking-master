@@ -12,6 +12,7 @@ import OnboardingScreen  from './screens/OnboardingScreen';
 import ProfileScreen     from './screens/ProfileScreen';
 import ChatSheet         from './screens/ChatSheet';
 import RecipeSheet       from './screens/RecipeSheet';
+import RecipeScreen      from './screens/RecipeScreen';
 import PrivacyScreen     from './screens/PrivacyScreen';
 import DataDeletionScreen from './screens/DataDeletionScreen';
 
@@ -144,6 +145,7 @@ function AppShell() {
           {/* ── Protected ── */}
           <Route path="/onboarding" element={<RequireAuth><OnboardingScreen /></RequireAuth>} />
           <Route path="/grocery"    element={<RequireAuth><GroceryScreen /></RequireAuth>} />
+          <Route path="/recipes"    element={<RequireAuth><RecipeScreen /></RequireAuth>} />
           <Route path="/profile"    element={<RequireAuth><ProfileScreen /></RequireAuth>} />
 
           {/* ── Public static pages ── */}

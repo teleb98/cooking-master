@@ -4,6 +4,7 @@ import Icon from '../icons';
 const TABS = [
   { path: '/',         label: '식단',   icon: s => Icon.calendar(s) },
   { path: '/grocery',  label: '장보기',  icon: s => Icon.cart(s) },
+  { path: '/recipes',  label: '레시피',  icon: s => Icon.book(s) },
   { path: '/profile',  label: '설정',   icon: s => Icon.settings(s) },
 ];
 
@@ -31,7 +32,7 @@ export default function BottomNav() {
             onClick={() => navigate(tab.path)}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-              padding: '6px 24px',
+              padding: '6px 16px',
               color: active ? 'var(--accent)' : 'var(--ink-4)',
               transition: 'color 150ms',
             }}

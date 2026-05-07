@@ -261,28 +261,37 @@ export default function CalendarScreen() {
         </div>
       </div>
 
-      {/* 주 탭 */}
-      <div style={{ padding: '0 18px', display: 'flex', gap: 8, marginBottom: 12 }}>
-        {[0, 1].map(w => {
-          const active = week === w;
-          const label = `${weekDates[0].getUTCMonth() + 1}/${weekDates[0].getUTCDate()}`;
-          const dates = getWeekDates(w);
-          const rangeLabel = `${dates[0].getUTCMonth() + 1}/${dates[0].getUTCDate()}–${dates[6].getUTCDate()}`;
-          return (
-            <button key={w} onClick={() => setWeek(w)} style={{
-              flex: 1, height: 40, borderRadius: 12,
-              background: active ? 'var(--ink)' : 'var(--surface)',
-              color: active ? '#fff' : 'var(--ink-2)',
-              border: active ? 'none' : '1px solid var(--line)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '0 14px', fontSize: 13, fontWeight: 600,
-            }}>
-              <span>{w === 0 ? '이번 주' : '다음 주'}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.7 }}>{rangeLabel}</span>
+      {/* 주 네비게이션 */}
+      {(() => {
+        const weekLabel = week === 0 ? '이번 주' : week === 1 ? '다음 주' : week === -1 ? '지난 주' : week < 0 ? `${Math.abs(week)}주 전` : `${week}주 후`;
+        const rangeLabel = `${weekDates[0].getUTCMonth() + 1}/${weekDates[0].getUTCDate()}–${weekDates[6].getUTCDate()}`;
+        return (
+          <div style={{ padding: '0 18px', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <button
+              onClick={() => setWeek(w => w - 1)}
+              style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              {Icon.chevronLeft(16)}
             </button>
-          );
-        })}
-      </div>
+            <div style={{
+              flex: 1, height: 36, borderRadius: 10, background: week === 0 ? 'var(--ink)' : 'var(--surface)',
+              border: week === 0 ? 'none' : '1px solid var(--line)',
+              color: week === 0 ? '#fff' : 'var(--ink-2)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '0 14px', gap: 8,
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{weekLabel}</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.65 }}>{rangeLabel}</span>
+            </div>
+            <button
+              onClick={() => setWeek(w => w + 1)}
+              style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+            >
+              {Icon.chevronRight(16)}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* 식단 그리드 */}
       <div style={{ padding: '0 12px', flex: 1 }}>
