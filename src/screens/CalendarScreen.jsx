@@ -45,7 +45,7 @@ function daysUntil(targetDow) {
 }
 
 /* ── 메뉴 선택 시트 ─────────────────────────────────────── */
-function MealPicker({ open, onClose, onSelect, recipes }) {
+function MealPicker({ open, onClose, onSelect, onPreview, recipes }) {
   const [search, setSearch] = useState('');
   const inputRef = useRef(null);
 
@@ -99,24 +99,41 @@ function MealPicker({ open, onClose, onSelect, recipes }) {
           {filtered.length === 0 ? (
             <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>검색 결과가 없습니다</div>
           ) : filtered.map(r => (
-            <button key={r.name} onClick={() => onSelect(r)} style={{
-              width: '100%', padding: '13px 14px',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              borderBottom: '1px solid var(--line-soft)', background: 'none', textAlign: 'left',
+            <div key={r.name} style={{
+              display: 'flex', alignItems: 'center',
+              borderBottom: '1px solid var(--line-soft)',
             }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{r.name}</div>
-                <div style={{ display: 'flex', gap: 5, marginTop: 3, alignItems: 'center' }}>
-                  {r.baby && (
-                    <span style={{ fontSize: 9.5, padding: '1px 6px', borderRadius: 4, background: 'var(--baby-soft)', color: 'var(--baby-ink)', fontWeight: 600 }}>이유식</span>
-                  )}
-                  {(r.tags ?? []).slice(0, 2).map(t => (
-                    <span key={t} style={{ fontSize: 10, color: 'var(--ink-4)' }}>{t}</span>
-                  ))}
+              <button onClick={() => onSelect(r)} style={{
+                flex: 1, padding: '13px 14px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: 'none', textAlign: 'left', minWidth: 0,
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{r.name}</div>
+                  <div style={{ display: 'flex', gap: 5, marginTop: 3, alignItems: 'center' }}>
+                    {r.baby && (
+                      <span style={{ fontSize: 9.5, padding: '1px 6px', borderRadius: 4, background: 'var(--baby-soft)', color: 'var(--baby-ink)', fontWeight: 600 }}>이유식</span>
+                    )}
+                    {(r.tags ?? []).slice(0, 2).map(t => (
+                      <span key={t} style={{ fontSize: 10, color: 'var(--ink-4)' }}>{t}</span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{r.kcal} kcal</span>
-            </button>
+                <span style={{ fontSize: 12, color: 'var(--ink-3)', fontFamily: 'var(--font-mono)', flexShrink: 0, marginLeft: 8 }}>{r.kcal} kcal</span>
+              </button>
+              <button
+                onClick={() => onPreview(r)}
+                style={{
+                  padding: '13px 12px 13px 4px', color: 'var(--ink-4)',
+                  display: 'flex', alignItems: 'center',
+                }}
+                title="레시피 보기"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                </svg>
+              </button>
+            </div>
           ))}
         </div>
       </div>
@@ -178,24 +195,30 @@ export default function CalendarScreen() {
     }
   };
 
-  const handleSelectMeal = async (recipe) => {
+  const handleSelectMeal = async (selectedRecipe) => {
     const { plan_date, meal_type } = picker;
     setPicker(null);
     const key = `${plan_date}_${meal_type}`;
-    // 낙관적 업데이트
     setMeals(prev => ({
       ...prev,
-      [key]: { plan_date, meal_type, menu_name: recipe.name, kcal: recipe.kcal, is_baby: recipe.baby },
+      [key]: { plan_date, meal_type, menu_name: selectedRecipe.name, kcal: selectedRecipe.kcal, is_baby: selectedRecipe.baby },
     }));
     try {
       await apiFetch('/meals', {
         method: 'PUT',
-        body: JSON.stringify({ plan_date, meal_type, menu_name: recipe.name }),
+        body: JSON.stringify({ plan_date, meal_type, menu_name: selectedRecipe.name }),
       });
+      // 선택 후 레시피 상세 자동 표시
+      setRecipe({ name: selectedRecipe.name, plan_date, meal_type });
     } catch {
       setMeals(prev => { const n = { ...prev }; delete n[key]; return n; });
       showToast('저장에 실패했어요. 다시 시도해주세요.');
     }
+  };
+
+  const handlePreviewRecipe = (recipe) => {
+    setPicker(null);
+    setRecipe({ name: recipe.name });
   };
 
   const dUntil = daysUntil(family.shopping_day);
@@ -445,6 +468,7 @@ export default function CalendarScreen() {
         open={!!picker}
         onClose={() => setPicker(null)}
         onSelect={handleSelectMeal}
+        onPreview={handlePreviewRecipe}
         recipes={recipes}
       />
     </div>
