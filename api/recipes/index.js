@@ -4,7 +4,7 @@ import { verifyToken } from '../_auth.js';
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-const DETAIL_SELECT = 'name, kcal, baby, baby_note, tags, ingredients, steps, prep_time, cook_time, tips, nutrition';
+const DETAIL_SELECT = 'name, kcal, baby, baby_note, tags, ingredients, steps, prep_time, cook_time, serving, tips, nutrition';
 
 async function generateDetail(recipe) {
   const apiKey = process.env.GEMINI_API_KEY;
