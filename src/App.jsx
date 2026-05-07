@@ -114,7 +114,7 @@ function GlobalToast() {
   );
 }
 
-const HIDE_NAV = ['/welcome', '/login', '/onboarding'];
+const HIDE_NAV = ['/welcome', '/login', '/onboarding', '/'];
 
 function AppShell() {
   const { accent, onboarded } = useApp();
@@ -135,8 +135,11 @@ function AppShell() {
           <Route path="/" element={
             !isAuthenticated                                                    ? <WelcomeScreen />                     :
             !onboarded && !localStorage.getItem('cookingMaster_onboarded')     ? <Navigate to="/onboarding" replace /> :
-                                                                                  <CalendarScreen />
+                                                                                  <Navigate to="/calendar" replace />
           } />
+
+          {/* ── Calendar (no onboarding guard — navigate here directly after onboarding) ── */}
+          <Route path="/calendar" element={<RequireAuth><CalendarScreen /></RequireAuth>} />
 
           {/* ── Public (redirect to / if already logged in) ── */}
           <Route path="/welcome" element={isAuthenticated ? <Navigate to="/" replace /> : <WelcomeScreen />} />

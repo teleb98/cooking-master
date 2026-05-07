@@ -145,17 +145,23 @@ export default function RecipeSheet() {
   const [genError, setGenError]       = useState(false);
 
   const name = recipe?.name ?? null;
+  const [baseError, setBaseError] = useState(false);
+
+  const fetchInfo = useCallback((recipeName) => {
+    setBaseLoading(true);
+    setBaseError(false);
+    setGenError(false);
+    apiFetch(`/recipes?name=${encodeURIComponent(recipeName)}`)
+      .then(d => setInfo(d.recipe ?? null))
+      .catch(() => { setInfo(null); setBaseError(true); })
+      .finally(() => setBaseLoading(false));
+  }, []);
 
   /* 기본 레시피 로드 */
   useEffect(() => {
-    if (!name) { setInfo(null); return; }
-    setBaseLoading(true);
-    setGenError(false);
-    apiFetch(`/recipes?name=${encodeURIComponent(name)}`)
-      .then(d => setInfo(d.recipe ?? null))
-      .catch(() => setInfo(null))
-      .finally(() => setBaseLoading(false));
-  }, [name]);
+    if (!name) { setInfo(null); setBaseError(false); return; }
+    fetchInfo(name);
+  }, [name, fetchInfo]);
 
   /* 조리법 AI 생성 */
   const generateSteps = useCallback(async (recipeName) => {
@@ -313,10 +319,19 @@ export default function RecipeSheet() {
 
         {!baseLoading && !info && name && (
           <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
-            <div>레시피 정보를 찾을 수 없어요</div>
-            <button onClick={handleReplace} style={{ marginTop: 16, padding: '10px 20px', borderRadius: 10, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}>
-              다른 메뉴로 교체
-            </button>
+            <div>{baseError ? '레시피를 불러오지 못했어요' : '레시피 정보를 찾을 수 없어요'}</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
+              {baseError && (
+                <button onClick={() => fetchInfo(name)} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}>
+                  다시 시도
+                </button>
+              )}
+              {recipe?.plan_date && (
+                <button onClick={handleReplace} style={{ padding: '10px 20px', borderRadius: 10, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}>
+                  다른 메뉴로 교체
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

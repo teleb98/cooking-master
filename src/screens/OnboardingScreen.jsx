@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { DAYS_KR, FOOD_CHIPS, ALLERGY_CHIPS } from '../data';
 import { useApp } from '../context/AppContext';
@@ -301,8 +300,8 @@ export default function OnboardingScreen() {
 
     // generate 스텝 완료 (확정)
     if (currentKey === 'generate') {
-      flushSync(() => markOnboarded());
-      navigate('/');
+      markOnboarded();
+      navigate('/calendar', { replace: true });
       return;
     }
 
@@ -340,7 +339,7 @@ export default function OnboardingScreen() {
           <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{steps[step]?.label}</div>
         </div>
         <button
-          onClick={() => { flushSync(() => markOnboarded()); navigate('/'); }}
+          onClick={() => { markOnboarded(); navigate('/calendar', { replace: true }); }}
           style={{ color: 'var(--ink-3)', fontSize: 13, fontWeight: 500 }}
         >건너뛰기</button>
       </div>

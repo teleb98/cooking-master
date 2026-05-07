@@ -212,7 +212,6 @@ export default function CalendarScreen() {
       });
     } catch {
       setMeals(prev => { const n = { ...prev }; delete n[key]; return n; });
-      setRecipe(null);
       showToast('저장에 실패했어요. 다시 시도해주세요.');
     }
   };

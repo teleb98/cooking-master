@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Icon from '../icons';
 
 const TABS = [
-  { path: '/',         label: '식단',   icon: s => Icon.calendar(s) },
+  { path: '/calendar', label: '식단',   icon: s => Icon.calendar(s) },
   { path: '/grocery',  label: '장보기',  icon: s => Icon.cart(s) },
   { path: '/recipes',  label: '레시피',  icon: s => Icon.book(s) },
   { path: '/profile',  label: '설정',   icon: s => Icon.settings(s) },
