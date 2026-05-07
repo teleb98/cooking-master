@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
 import { Sheet } from '../components/Sheet';
@@ -12,7 +13,7 @@ const MEAL_KR = { breakfast: '아침', lunch: '점심', dinner: '저녁' };
 const DAY_KR  = ['일', '월', '화', '수', '목', '금', '토'];
 
 /* ── 개별 변경 선택 컴포넌트 ─────────────────────────────────── */
-function ChangeSelector({ changes, accent, onApply }) {
+function ChangeSelector({ changes, accent, onApply, onGoGrocery }) {
   const [selected, setSelected] = useState(() => new Set(changes.map((_, i) => i)));
   const [applying, setApplying] = useState(false);
   const [applied, setApplied]   = useState(false);
@@ -88,9 +89,22 @@ function ChangeSelector({ changes, accent, onApply }) {
       {/* 적용 버튼 */}
       <div style={{ padding: '10px 12px', borderTop: '1px solid var(--line-soft)', background: 'var(--bg)' }}>
         {applied ? (
-          <div style={{ fontSize: 12.5, color: 'var(--ink-3)', textAlign: 'center', padding: '4px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <span style={{ color: 'var(--baby)' }}>{Icon.check(13)}</span>
-            캘린더에 반영되었어요
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '2px 0' }}>
+            <div style={{ fontSize: 12.5, color: 'var(--ink-3)', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <span style={{ color: 'var(--baby)' }}>{Icon.check(13)}</span>
+              캘린더에 반영되었어요
+            </div>
+            <button
+              onClick={onGoGrocery}
+              style={{
+                width: '100%', padding: '9px 0', borderRadius: 8,
+                border: '1px solid var(--line)', background: 'var(--surface)',
+                fontSize: 12, fontWeight: 600, color: 'var(--ink-2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+              }}
+            >
+              {Icon.cart(13)} 장보기 목록 업데이트하기
+            </button>
           </div>
         ) : (
           <button
@@ -121,7 +135,7 @@ function ChangeSelector({ changes, accent, onApply }) {
 }
 
 /* ── 메시지 버블 ──────────────────────────────────────────────── */
-function MessageBubble({ m, accent, onApply }) {
+function MessageBubble({ m, accent, onApply, onGoGrocery }) {
   if (m.kind === 'thinking') {
     return (
       <div style={{ alignSelf: 'flex-start', display: 'flex', gap: 4, padding: '10px 14px', background: 'var(--bg-2)', borderRadius: 14 }}>
@@ -148,7 +162,7 @@ function MessageBubble({ m, accent, onApply }) {
         {displayText || (m.streaming ? '...' : '')}
       </div>
       {m.changes?.length > 0 && (
-        <ChangeSelector changes={m.changes} accent={accent} onApply={onApply} />
+        <ChangeSelector changes={m.changes} accent={accent} onApply={onApply} onGoGrocery={onGoGrocery} />
       )}
     </div>
   );
@@ -158,6 +172,7 @@ function MessageBubble({ m, accent, onApply }) {
 export default function ChatSheet() {
   const { chatOpen, setChatOpen, accent, bumpMealVersion } = useApp();
   const { family } = useFamily();
+  const navigate = useNavigate();
   const [input, setInput]     = useState('');
   const [messages, setMessages] = useState([]);
   const [sending, setSending]  = useState(false);
@@ -242,7 +257,7 @@ export default function ChatSheet() {
     <Sheet open={chatOpen} onClose={() => setChatOpen(false)} title="Cooking Master AI" subtitle="자연어로 식단을 바꾸세요">
       <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '8px 16px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {messages.map((m, i) => (
-          <MessageBubble key={m.id ?? i} m={m} accent={accent} onApply={applyChanges} />
+          <MessageBubble key={m.id ?? i} m={m} accent={accent} onApply={applyChanges} onGoGrocery={() => { setChatOpen(false); navigate('/grocery'); }} />
         ))}
         <div ref={bottomRef} />
       </div>

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DAYS_KR } from '../data';
+import { DAYS_KR, FOOD_CHIPS, ALLERGY_CHIPS } from '../data';
 import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
 import { useAuth } from '../context/AuthContext';
@@ -24,20 +24,6 @@ async function apiFetch(path, opts = {}) {
   }
   return res.json();
 }
-
-/* ── 식품 취향 데이터 ────────────────────────────────────── */
-const FOOD_CHIPS = [
-  '소고기', '돼지고기', '닭고기', '오리고기',
-  '연어', '고등어', '새우', '오징어', '조개',
-  '두부', '달걀', '치즈',
-  '시금치', '브로콜리', '버섯', '당근', '양배추', '파프리카',
-  '된장·간장 베이스', '매운 음식', '국·찌개', '볶음 요리',
-];
-
-const ALLERGY_CHIPS = [
-  '땅콩', '갑각류', '유제품', '밀·글루텐',
-  '달걀', '견과류', '생선·해산물', '대두·콩',
-];
 
 /* ── 공통 컴포넌트 ───────────────────────────────────────── */
 function Hero({ kr, en, sub }) {

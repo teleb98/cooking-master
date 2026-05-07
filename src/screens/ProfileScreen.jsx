@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
+import { FOOD_CHIPS, ALLERGY_CHIPS } from '../data';
 import Icon from '../icons';
 
 const TOKEN_KEY = 'cookingMaster_token';
@@ -193,6 +194,8 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
   const [babyName, setBabyName]   = useState(profile.baby_name ?? '');
   const [babyBday, setBabyBday]   = useState(profile.baby_birthday ?? '');
   const [shopday, setShopday]     = useState(profile.shopping_day ?? 6);
+  const [likes, setLikes]         = useState(new Set(profile.food_likes ?? []));
+  const [avoids, setAvoids]       = useState(new Set(profile.allergies  ?? []));
   const [saving, setSaving]       = useState(false);
 
   useEffect(() => {
@@ -202,8 +205,13 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
       setBabyName(profile.baby_name ?? '');
       setBabyBday(profile.baby_birthday ?? '');
       setShopday(profile.shopping_day ?? 6);
+      setLikes(new Set(profile.food_likes ?? []));
+      setAvoids(new Set(profile.allergies  ?? []));
     }
   }, [open, profile]);
+
+  const toggleLike  = (item) => setLikes(prev  => { const s = new Set(prev); s.has(item) ? s.delete(item) : s.add(item); return s; });
+  const toggleAvoid = (item) => setAvoids(prev => { const s = new Set(prev); s.has(item) ? s.delete(item) : s.add(item); return s; });
 
   const handleSave = async () => {
     setSaving(true);
@@ -213,6 +221,8 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
       baby_name:     type === 'family' ? (babyName || null) : null,
       baby_birthday: type === 'family' ? (babyBday || null) : null,
       shopping_day:  shopday,
+      food_likes:    Array.from(likes),
+      allergies:     Array.from(avoids),
     });
     setSaving(false);
     onClose();
@@ -282,6 +292,44 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
               </div>
             </div>
           )}
+
+          {/* 좋아하는 재료 */}
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <FieldLabel>좋아하는 재료</FieldLabel>
+              {likes.size > 0 && <span style={{ fontSize: 11, color: accent, fontWeight: 700 }}>{likes.size}개 선택</span>}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+              {FOOD_CHIPS.map(item => (
+                <button key={item} onClick={() => toggleLike(item)} style={{
+                  padding: '7px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600,
+                  background: likes.has(item) ? accent : 'var(--bg)',
+                  color: likes.has(item) ? '#fff' : 'var(--ink-2)',
+                  border: likes.has(item) ? 'none' : '1px solid var(--line)',
+                  transition: 'background 120ms',
+                }}>{item}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* 알레르기 */}
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <FieldLabel>알레르기 · 피하는 재료</FieldLabel>
+              {avoids.size > 0 && <span style={{ fontSize: 11, color: '#C0392B', fontWeight: 700 }}>{avoids.size}개 선택</span>}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+              {ALLERGY_CHIPS.map(item => (
+                <button key={item} onClick={() => toggleAvoid(item)} style={{
+                  padding: '7px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600,
+                  background: avoids.has(item) ? '#C0392B' : 'var(--bg)',
+                  color: avoids.has(item) ? '#fff' : 'var(--ink-2)',
+                  border: avoids.has(item) ? 'none' : '1px solid var(--line)',
+                  transition: 'background 120ms',
+                }}>{item}</button>
+              ))}
+            </div>
+          </div>
 
           {/* 장보는 요일 */}
           <div style={{ marginBottom: 8 }}>
