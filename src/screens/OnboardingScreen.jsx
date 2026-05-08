@@ -231,6 +231,7 @@ export default function OnboardingScreen() {
   const [genState, setGenState] = useState('idle'); // 'idle'|'loading'|'done'|'error'
   const [genPlan,  setGenPlan]  = useState([]);
   const [genErr,   setGenErr]   = useState('');
+  const [showWelcome, setShowWelcome] = useState(false);
 
   /* ── 스텝 계산 ── */
   const steps = useMemo(() => {
@@ -298,10 +299,13 @@ export default function OnboardingScreen() {
       return;
     }
 
-    // generate 스텝 완료 (확정) — window.location으로 완전 재로드하여 상태 경쟁 조건 원천 차단
+    // generate 스텝 완료 (확정) — 환영 오버레이 표시 후 window.location으로 완전 재로드
     if (currentKey === 'generate') {
-      markOnboarded();
-      window.location.replace('/calendar');
+      setShowWelcome(true);
+      setTimeout(() => {
+        markOnboarded();
+        window.location.replace('/calendar');
+      }, 2000);
       return;
     }
 
@@ -329,6 +333,42 @@ export default function OnboardingScreen() {
       background: 'var(--bg)',
       paddingTop: 'env(safe-area-inset-top, 0px)',
     }}>
+      {/* ── 온보딩 완료 환영 오버레이 ── */}
+      {showWelcome && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 999,
+          background: 'var(--bg)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 24,
+          animation: 'welcomeFadeIn 350ms cubic-bezier(0.34,1.56,0.64,1)',
+        }}>
+          <div style={{
+            width: 88, height: 88, borderRadius: 26,
+            background: accent, color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: `0 16px 40px ${accent}55`,
+          }}>
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--ink)' }}>
+              환영해요{myName ? `, ${myName}님` : ''}!
+            </div>
+            <div style={{ fontSize: 14, color: 'var(--ink-3)', marginTop: 10, lineHeight: 1.6 }}>
+              2주 식단이 준비됐어요<br />캘린더에서 확인해 보세요 🎉
+            </div>
+          </div>
+          <style>{`
+            @keyframes welcomeFadeIn {
+              from { opacity: 0; transform: scale(0.92); }
+              to   { opacity: 1; transform: scale(1); }
+            }
+          `}</style>
+        </div>
+      )}
       {/* 상단 바 */}
       <div style={{ padding: '14px 18px 10px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={prev} style={{ color: 'var(--ink-2)' }}>{Icon.back(20)}</button>
