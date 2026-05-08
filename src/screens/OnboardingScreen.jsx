@@ -355,8 +355,8 @@ export default function OnboardingScreen() {
         ))}
       </div>
 
-      {/* 콘텐츠 */}
-      <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '4px 20px 24px' }}>
+      {/* 콘텐츠 — minHeight:0 필수: flex child에서 overflow:auto가 동작하려면 기본 min-height:auto를 0으로 덮어야 함 */}
+      <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', minHeight: 0, padding: '4px 20px 24px' }}>
 
         {/* ── STEP: 취향 설문 ── */}
         {currentKey === 'preferences' && (
