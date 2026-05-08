@@ -298,10 +298,10 @@ export default function OnboardingScreen() {
       return;
     }
 
-    // generate 스텝 완료 (확정)
+    // generate 스텝 완료 (확정) — window.location으로 완전 재로드하여 상태 경쟁 조건 원천 차단
     if (currentKey === 'generate') {
       markOnboarded();
-      navigate('/calendar', { replace: true });
+      window.location.replace('/calendar');
       return;
     }
 
@@ -339,7 +339,7 @@ export default function OnboardingScreen() {
           <div style={{ fontSize: 14, fontWeight: 700, marginTop: 2 }}>{steps[step]?.label}</div>
         </div>
         <button
-          onClick={() => { markOnboarded(); navigate('/calendar', { replace: true }); }}
+          onClick={() => { markOnboarded(); window.location.replace('/calendar'); }}
           style={{ color: 'var(--ink-3)', fontSize: 13, fontWeight: 500 }}
         >건너뛰기</button>
       </div>
