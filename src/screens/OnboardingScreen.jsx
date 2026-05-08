@@ -325,7 +325,7 @@ export default function OnboardingScreen() {
 
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', height: '100%',
+      display: 'flex', flexDirection: 'column', height: '100dvh',
       background: 'var(--bg)',
       paddingTop: 'env(safe-area-inset-top, 0px)',
     }}>
