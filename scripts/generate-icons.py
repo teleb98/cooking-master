@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """
-Cooking Master — app icon generator
-Outputs: PWA icons, favicon.ico, apple-touch-icon, Android maskable icons
-Design:  vertical gradient bg (#D07050 → #8C361E) + white pot silhouette + gold sparkle
+Cooking Master — app icon generator v2 (modern clean redesign)
+
+Changes from v1:
+- Removed steam lines (simpler, cleaner)
+- Taller pot body (better proportions, less squat)
+- Circular knob (not rectangular)
+- Thinner, more refined handles
+- Thinner sparkle points
+- Brighter, more saturated gradient
+- Subtle top-center light source overlay for depth
 """
 
 from PIL import Image, ImageDraw
@@ -10,26 +17,16 @@ import math, os
 
 os.makedirs('public', exist_ok=True)
 
-# ── Brand palette ─────────────────────────────────────────────────────
-C_TOP    = (215, 112, 76)    # #D7704C  warm terracotta highlight
-C_BOTTOM = (140, 54, 30)     # #8C361E  deep shadow
-C_MID    = (182, 78, 50)     # midpoint for 3-stop gradient richness
+# ── Palette ─────────────────────────────────────────────────────────
+C_TOP    = (236, 108, 62)   # #EC6C3E  vibrant coral-orange
+C_BOTTOM = (158, 46, 18)    # #9E2E12  deep sienna
 WHITE    = (255, 255, 255, 255)
-GOLD     = (255, 213, 96,  255)  # #FFD560  sparkle
+GOLD     = (255, 220, 70,  255)  # #FFDC46  crisp gold
 
 
-# ── Drawing primitives ────────────────────────────────────────────────
-def lerp3(c1, c2, t):
+def lerp_rgb(c1, c2, t):
     return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
 
-def lerp3_stops(y, H):
-    """3-stop gradient: top → mid (40%) → bottom."""
-    if y < H * 0.40:
-        t = y / (H * 0.40)
-        return lerp3(C_TOP, C_MID, t)
-    else:
-        t = (y - H * 0.40) / (H * 0.60)
-        return lerp3(C_MID, C_BOTTOM, t)
 
 def rrect(draw, x0, y0, x1, y1, r, fill):
     r = max(0, min(r, (x1 - x0) // 2, (y1 - y0) // 2))
@@ -37,13 +34,15 @@ def rrect(draw, x0, y0, x1, y1, r, fill):
         draw.rectangle([x0, y0, x1, y1], fill=fill)
         return
     draw.rectangle([x0 + r, y0, x1 - r, y1], fill=fill)
-    draw.rectangle([x0,     y0 + r, x1, y1 - r], fill=fill)
-    draw.ellipse([x0,         y0,         x0 + 2*r, y0 + 2*r], fill=fill)
-    draw.ellipse([x1 - 2*r,  y0,         x1,        y0 + 2*r], fill=fill)
-    draw.ellipse([x0,         y1 - 2*r,  x0 + 2*r,  y1      ], fill=fill)
-    draw.ellipse([x1 - 2*r,  y1 - 2*r,  x1,         y1      ], fill=fill)
+    draw.rectangle([x0, y0 + r, x1, y1 - r], fill=fill)
+    draw.ellipse([x0,        y0,        x0 + 2*r, y0 + 2*r], fill=fill)
+    draw.ellipse([x1 - 2*r, y0,        x1,        y0 + 2*r], fill=fill)
+    draw.ellipse([x0,        y1 - 2*r, x0 + 2*r, y1       ], fill=fill)
+    draw.ellipse([x1 - 2*r, y1 - 2*r, x1,        y1       ], fill=fill)
+
 
 def star4(draw, cx, cy, r_out, r_in, fill):
+    """4-point star with thin, elegant points."""
     pts = []
     for i in range(8):
         ang = math.pi * i / 4 - math.pi / 2
@@ -52,123 +51,102 @@ def star4(draw, cx, cy, r_out, r_in, fill):
     draw.polygon(pts, fill=fill)
 
 
-# ── Core icon renderer ────────────────────────────────────────────────
 def make_icon(out_size, maskable=False):
-    """
-    out_size  : final pixel size (e.g. 512)
-    maskable  : if True, no rounded corners + content in safe zone (Android adaptive)
-    """
     SCALE   = 4 if out_size <= 64 else (2 if out_size <= 256 else 1)
     S       = out_size * SCALE
     corners = (not maskable) and (out_size >= 48)
-    detail  = out_size >= 48    # handles + sparkle
-    fine    = out_size >= 128   # steam above knob
+    detail  = out_size >= 48
 
-    # — gradient background —
+    # ── Gradient background ──────────────────────────────────────────
     base = Image.new('RGB', (S, S))
     bd   = ImageDraw.Draw(base)
     for y in range(S):
-        c = lerp3_stops(y, S)
-        bd.line([(0, y), (S - 1, y)], fill=c)
+        t = y / max(1, S - 1)
+        bd.line([(0, y), (S - 1, y)], fill=lerp_rgb(C_TOP, C_BOTTOM, t))
     img = base.convert('RGBA')
 
+    # ── Rounded corners ──────────────────────────────────────────────
     if corners:
-        r_bg = int(S * 0.225)        # iOS-style ~22% radius
+        r_bg = int(S * 0.225)
         mask = Image.new('L', (S, S), 0)
         rrect(ImageDraw.Draw(mask), 0, 0, S, S, r_bg, 255)
         img.putalpha(mask)
-    elif not maskable:
-        img.putalpha(Image.new('L', (S, S), 255))
     else:
         img.putalpha(Image.new('L', (S, S), 255))
 
-    d = ImageDraw.Draw(img)
-
+    d  = ImageDraw.Draw(img)
     cx, cy = S // 2, S // 2
-    # content scale: maskable uses 74% (safe zone), regular 80%
-    cs = S * (0.74 if maskable else 0.80)
+    cs = S * (0.70 if maskable else 0.80)
 
-    # pot assembly center: 3% below icon center
-    pot_cy = cy + int(cs * 0.028)
+    # ── Pot body — bw/bh define the body; pot_cy is derived so the
+    #    whole assembly (knob top → body bottom) is vertically centered ──
+    bw = int(cs * 0.360)
+    bh = int(cs * 0.320)
+    br = int(cs * 0.080)
 
-    # ── Pot body ──────────────────────────────────────────────────
-    bw = int(cs * 0.395)
-    bh = int(cs * 0.265)
-    br = int(cs * 0.072)
-    bx0, bx1 = cx - bw, cx + bw
-    by0, by1 = pot_cy - bh // 2, pot_cy + bh // 2
+    lh = int(cs * 0.090)   # lid height
+    kr = int(cs * 0.042)   # knob radius
+
+    # Assembly height = body + lid + knob diameter
+    assembly_h = bh + lh + 2 * kr
+    # Center the assembly; shift down slightly for optical balance with sparkle above
+    assembly_top = cy - assembly_h // 2 + int(cs * 0.010)
+    knob_top_y   = assembly_top
+    ly0          = knob_top_y + 2 * kr               # lid top
+    ly1          = ly0 + lh                           # lid bottom (= body top + small overlap)
+    by0          = ly1 - int(cs * 0.015)              # body top (lid overlaps slightly)
+    by1          = by0 + bh
+    bx0, bx1     = cx - bw, cx + bw
+
     rrect(d, bx0, by0, bx1, by1, br, WHITE)
 
-    # ── Lid ───────────────────────────────────────────────────────
-    lw = int(cs * 0.425)
-    lh = int(cs * 0.085)
-    lr = int(cs * 0.038)
-    ly1 = by0 + int(cs * 0.018)   # overlaps body top slightly
-    ly0 = ly1 - lh
+    # ── Lid ──────────────────────────────────────────────────────────
+    lw = int(cs * 0.410)
+    lr = int(cs * 0.052)
     rrect(d, cx - lw, ly0, cx + lw, ly1, lr, WHITE)
 
-    # ── Knob on lid ───────────────────────────────────────────────
-    kw = int(cs * 0.038)
-    kh = int(cs * 0.060)
-    kr = int(cs * 0.020)
-    rrect(d, cx - kw, ly0 - kh, cx + kw, ly0 + kr, kr, WHITE)
-
-    if fine:
-        # ── Steam (3 softened lines above knob) ───────────────────
-        sw  = int(cs * 0.013)
-        sh  = int(cs * 0.042)
-        sr  = int(cs * 0.008)
-        sy1 = ly0 - kh - int(cs * 0.018)
-        sy0 = sy1 - sh
-        for ox in (-int(cs * 0.052), 0, int(cs * 0.052)):
-            steam_col = (255, 255, 255, 140)
-            rrect(d, cx + ox - sw, sy0, cx + ox + sw, sy1, sr, steam_col)
+    # ── Knob (circle) ────────────────────────────────────────────────
+    d.ellipse([cx - kr, knob_top_y, cx + kr, knob_top_y + 2 * kr], fill=WHITE)
 
     if detail:
-        # ── Handles ───────────────────────────────────────────────
-        hw  = int(cs * 0.078)
-        hh  = int(cs * 0.086)
-        hr  = int(cs * 0.030)
-        hcy = by0 + int(bh * 0.38)
-        ov  = int(cs * 0.020)   # overlap into body edge
+        # ── Handles ──────────────────────────────────────────────────
+        hw  = int(cs * 0.068)
+        hh  = int(cs * 0.054)
+        hr  = int(cs * 0.027)
+        hcy = by0 + int(bh * 0.40)
+        ov  = int(cs * 0.015)
         rrect(d, bx0 - hw + ov, hcy - hh//2, bx0 + ov, hcy + hh//2, hr, WHITE)
         rrect(d, bx1 - ov, hcy - hh//2, bx1 + hw - ov, hcy + hh//2, hr, WHITE)
 
-        # ── Gold sparkle (upper-right quadrant) ───────────────────
-        sp_cx = cx + int(cs * 0.285)
-        sp_cy = cy - int(cs * 0.300)
-        sp_r  = int(cs * 0.063)
-        star4(d, sp_cx, sp_cy, sp_r, int(sp_r * 0.34), GOLD)
+        # ── Sparkle — upper-right, clear of pot ──────────────────────
+        sp_cx = cx + int(cs * 0.265)
+        sp_cy = knob_top_y - int(cs * 0.095)   # above knob with breathing room
+        sp_r  = int(cs * 0.062)
+        star4(d, sp_cx, sp_cy, sp_r, int(sp_r * 0.24), GOLD)
 
-    # ── Downscale with LANCZOS ────────────────────────────────────
     return img.resize((out_size, out_size), Image.LANCZOS)
 
 
-# ── Output all sizes ──────────────────────────────────────────────────
+# ── Generate all sizes ───────────────────────────────────────────────
 REGULAR = [16, 32, 48, 72, 96, 120, 128, 144, 152, 167, 180, 192, 384, 512]
 
-print('Generating icons...')
+print('Generating icons v2...')
 
 for sz in REGULAR:
-    path = f'public/icon-{sz}.png'
-    make_icon(sz).save(path, optimize=True)
-    print(f'  ✓  {path}')
+    make_icon(sz).save(f'public/icon-{sz}.png', optimize=True)
+    print(f'  ✓  icon-{sz}.png')
 
-# favicon.ico — multi-size (16 / 32 / 48)
 icos = [make_icon(sz) for sz in [16, 32, 48]]
 icos[0].save('public/favicon.ico', format='ICO',
              sizes=[(16, 16), (32, 32), (48, 48)],
              append_images=icos[1:])
-print('  ✓  public/favicon.ico')
+print('  ✓  favicon.ico')
 
-# Apple touch icon (iOS home screen)
 make_icon(180).save('public/apple-touch-icon.png', optimize=True)
-print('  ✓  public/apple-touch-icon.png')
+print('  ✓  apple-touch-icon.png')
 
-# Maskable icons — Android adaptive icon (no rounded corners, safe-zone content)
 for sz in [192, 512]:
-    path = f'public/icon-maskable-{sz}.png'
-    make_icon(sz, maskable=True).save(path, optimize=True)
-    print(f'  ✓  {path}')
+    make_icon(sz, maskable=True).save(f'public/icon-maskable-{sz}.png', optimize=True)
+    print(f'  ✓  icon-maskable-{sz}.png')
 
-print('\nAll icons generated successfully.')
+print('\nAll icons generated (v2).')
