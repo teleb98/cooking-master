@@ -384,8 +384,49 @@ export default function ProfileScreen() {
   const { family, profile, saveProfile } = useFamily();
   const navigate = useNavigate();
 
-  const [editOpen,   setEditOpen]   = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editOpen,     setEditOpen]     = useState(false);
+  const [deleteOpen,   setDeleteOpen]   = useState(false);
+  const [inviteState,  setInviteState]  = useState('idle');   // idle | loading | ready
+  const [inviteUrl,    setInviteUrl]    = useState(null);
+  const [inviteExp,    setInviteExp]    = useState(null);
+  const [copied,       setCopied]       = useState(false);
+
+  const loadInvite = async () => {
+    setInviteState('loading');
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const res = await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      setInviteUrl(d.url);
+      setInviteExp(d.expires_at);
+      setInviteState('ready');
+    } catch {
+      showToast('초대 링크 생성에 실패했어요.');
+      setInviteState('idle');
+    }
+  };
+
+  const copyLink = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      showToast('복사에 실패했어요. 링크를 직접 선택해 복사해주세요.');
+    }
+  };
+
+  const shareLink = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.share({ title: 'Cooking Master 초대', text: '함께 식단을 관리해요!', url: inviteUrl });
+    } catch { /* 취소 시 무시 */ }
+  };
 
   const provider = user?.provider ? PROVIDER_LABEL[user.provider] : null;
 
@@ -519,6 +560,111 @@ export default function ProfileScreen() {
           가족 설정 수정
         </button>
       </div>
+
+      {/* 파트너 초대 */}
+      {family.type !== 'solo' && (
+        <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
+          <div className="kr-en" style={{ marginBottom: 10 }}>INVITE · 파트너 초대</div>
+
+          {/* 이미 연결된 경우 */}
+          {family.partner_name ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: '50%', background: accent,
+                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, fontWeight: 700, flexShrink: 0,
+              }}>
+                {family.partner_name[0]}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{family.partner_name}님과 연결됨</div>
+                <div className="kr-en" style={{ marginTop: 1 }}>Connected partner</div>
+              </div>
+              <span style={{
+                fontSize: 10, padding: '3px 8px', borderRadius: 6,
+                background: 'rgba(111,142,90,0.12)', color: '#4A7A3A', fontWeight: 700,
+              }}>연결됨</span>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.6, marginBottom: 14 }}>
+                파트너를 초대하면 식단과 장보기 목록을 함께 관리할 수 있어요.
+              </div>
+
+              {/* 초대 링크 생성 전 */}
+              {inviteState !== 'ready' && (
+                <button
+                  onClick={loadInvite}
+                  disabled={inviteState === 'loading'}
+                  style={{
+                    width: '100%', padding: '12px 0', borderRadius: 12,
+                    background: inviteState === 'loading' ? 'var(--ink-4)' : accent,
+                    color: '#fff', fontSize: 13.5, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    boxShadow: inviteState === 'loading' ? 'none' : `0 4px 14px ${accent}4D`,
+                  }}
+                >
+                  {inviteState === 'loading' ? (
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+                      <path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite"/>
+                      </path>
+                    </svg>
+                  ) : Icon.spark(15)}
+                  {inviteState === 'loading' ? '링크 생성 중…' : '초대 링크 만들기'}
+                </button>
+              )}
+
+              {/* 초대 링크 생성 후 */}
+              {inviteState === 'ready' && inviteUrl && (
+                <div>
+                  {/* 링크 표시 */}
+                  <div style={{
+                    background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10,
+                    padding: '11px 12px', marginBottom: 8,
+                    fontSize: 11.5, color: 'var(--ink-2)', fontFamily: 'var(--font-mono)',
+                    wordBreak: 'break-all', lineHeight: 1.5,
+                  }}>
+                    {inviteUrl}
+                  </div>
+                  {inviteExp && (
+                    <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 10 }}>
+                      {new Date(inviteExp).toLocaleDateString('ko-KR')}까지 유효 · 1회 사용
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      onClick={copyLink}
+                      style={{
+                        flex: 1, padding: '12px 0', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                        background: copied ? 'rgba(111,142,90,0.12)' : 'var(--bg)',
+                        color: copied ? '#4A7A3A' : 'var(--ink-2)',
+                        border: `1px solid ${copied ? '#4A7A3A' : 'var(--line)'}`,
+                        transition: 'all 200ms',
+                      }}
+                    >
+                      {copied ? '복사됨 ✓' : '링크 복사'}
+                    </button>
+                    {typeof navigator !== 'undefined' && navigator.share && (
+                      <button
+                        onClick={shareLink}
+                        style={{
+                          flex: 1, padding: '12px 0', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                          background: accent, color: '#fff',
+                          boxShadow: `0 3px 10px ${accent}4D`,
+                        }}
+                      >
+                        공유하기
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* 장보는 요일 */}
       <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>

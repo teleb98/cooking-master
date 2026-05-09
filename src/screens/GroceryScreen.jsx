@@ -124,7 +124,7 @@ export default function GroceryScreen() {
   const generate = async () => {
     setGenerating(true);
     try {
-      await apiFetch('/grocery/generate', { method: 'POST', body: JSON.stringify({ week_start: weekStart }) });
+      await apiFetch('/grocery', { method: 'POST', body: JSON.stringify({ week_start: weekStart }) });
       await load();
     } catch {
       showToast('장보기 목록 생성에 실패했어요.');

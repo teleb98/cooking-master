@@ -15,6 +15,7 @@ import RecipeSheet       from './screens/RecipeSheet';
 import RecipeScreen      from './screens/RecipeScreen';
 import PrivacyScreen     from './screens/PrivacyScreen';
 import DataDeletionScreen from './screens/DataDeletionScreen';
+import JoinScreen        from './screens/JoinScreen';
 
 function RequireAuth({ children }) {
   const { isAuthenticated, authLoading } = useAuth();
@@ -114,7 +115,7 @@ function GlobalToast() {
   );
 }
 
-const HIDE_NAV = ['/welcome', '/login', '/onboarding', '/'];
+const HIDE_NAV = ['/welcome', '/login', '/onboarding', '/join', '/'];
 
 function AppShell() {
   const { accent, onboarded } = useApp();
@@ -150,6 +151,9 @@ function AppShell() {
           <Route path="/grocery"    element={<RequireAuth><GroceryScreen /></RequireAuth>} />
           <Route path="/recipes"    element={<RequireAuth><RecipeScreen /></RequireAuth>} />
           <Route path="/profile"    element={<RequireAuth><ProfileScreen /></RequireAuth>} />
+
+          {/* ── 가족 초대 수락 (공개) ── */}
+          <Route path="/join" element={<JoinScreen />} />
 
           {/* ── Public static pages ── */}
           <Route path="/privacy"       element={<PrivacyScreen />} />
