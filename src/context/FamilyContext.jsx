@@ -7,13 +7,14 @@ const STORAGE_KEY = 'cookingMaster_profile';
 const TOKEN_KEY   = 'cookingMaster_token';
 
 const DEFAULTS = {
-  family_type:   'couple',
-  baby_birthday: null,
-  baby_name:     null,
-  shopping_day:  6,
-  partner_name:  null,
-  food_likes:    [],
-  allergies:     [],
+  family_type:     'couple',
+  baby_birthday:   null,
+  baby_name:       null,
+  shopping_day:    6,
+  partner_name:    null,
+  food_likes:      [],
+  allergies:       [],
+  family_group_id: null,
 };
 
 const DAYS_KR = ['월', '화', '수', '목', '금', '토', '일'];
@@ -54,58 +55,71 @@ async function apiFetch(path, opts = {}) {
 export function FamilyProvider({ children }) {
   const { user, isAuthenticated } = useAuth();
   const [profile, setProfile] = useState(loadLocal);
+  const [members, setMembers] = useState([]);
 
-  // Pull saved profile from server on login
+  const loadProfile = useCallback(async () => {
+    try {
+      const { profile: srv, members: srvMembers } = await apiFetch('/user/profile');
+      if (srv && Object.keys(srv).length > 1) {
+        const merged = { ...DEFAULTS, ...srv };
+        setProfile(merged);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+        localStorage.setItem('cookingMaster_onboarded', '1');
+      }
+      setMembers(srvMembers ?? []);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) return;
-    apiFetch('/user/profile')
-      .then(({ profile: srv }) => {
-        if (srv && Object.keys(srv).length > 1) {
-          const merged = { ...DEFAULTS, ...srv };
-          setProfile(merged);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-          // Restore onboarded flag for returning users who logged out
-          localStorage.setItem('cookingMaster_onboarded', '1');
-        }
-      })
-      .catch(() => {});
-  }, [isAuthenticated]);
+    loadProfile();
+  }, [isAuthenticated, loadProfile]);
 
   const saveProfile = useCallback(async (updates) => {
     const next = { ...profile, ...updates };
     setProfile(next);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    await apiFetch('/user/profile', { method: 'PUT', body: JSON.stringify(next) }).catch(() => {});
+    try {
+      const { profile: saved, members: srvMembers } = await apiFetch('/user/profile', {
+        method: 'PUT',
+        body: JSON.stringify(next),
+      });
+      if (saved) {
+        const merged = { ...DEFAULTS, ...saved };
+        setProfile(merged);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+      }
+      setMembers(srvMembers ?? []);
+    } catch {}
     return next;
   }, [profile]);
 
   const months = monthsOld(profile.baby_birthday);
   const { stage, en: stage_en } = babyStage(months);
 
-  // Derived display object used across screens
+  // 연결된 파트너 멤버 (active 상태의 partner role)
+  const activePartner = members.find(m => m.role === 'partner' && m.status === 'active');
+
   const family = {
-    // Identity
-    name:           user?.name ?? '우리 가족',
-    initial:        (user?.name ?? '가')[0],
-    type:           profile.family_type,
-    // Baby
-    has_baby:       !!profile.baby_birthday,
-    baby_name:      profile.baby_name ?? null,
-    baby_months:    months,
-    baby_stage:     stage,
-    baby_stage_en:  stage_en,
-    // Shopping
-    shopping_day:    profile.shopping_day,
-    shopping_day_kr: DAYS_KR[profile.shopping_day] ?? '일',
-    // Partner
-    partner_name:    profile.partner_name,
-    // Preferences
-    food_likes:      Array.isArray(profile.food_likes) ? profile.food_likes : [],
-    allergies:       Array.isArray(profile.allergies)  ? profile.allergies  : [],
+    name:              user?.name ?? '우리 가족',
+    initial:           (user?.name ?? '가')[0],
+    type:              profile.family_type,
+    has_baby:          !!profile.baby_birthday,
+    baby_name:         profile.baby_name ?? null,
+    baby_months:       months,
+    baby_stage:        stage,
+    baby_stage_en:     stage_en,
+    shopping_day:      profile.shopping_day,
+    shopping_day_kr:   DAYS_KR[profile.shopping_day] ?? '일',
+    partner_name:      activePartner?.name ?? profile.partner_name,
+    partner_connected: !!activePartner,
+    family_group_id:   profile.family_group_id ?? null,
+    food_likes:        Array.isArray(profile.food_likes) ? profile.food_likes : [],
+    allergies:         Array.isArray(profile.allergies)  ? profile.allergies  : [],
   };
 
   return (
-    <FamilyContext.Provider value={{ profile, family, saveProfile }}>
+    <FamilyContext.Provider value={{ profile, family, members, saveProfile, loadProfile }}>
       {children}
     </FamilyContext.Provider>
   );

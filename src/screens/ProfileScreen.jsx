@@ -381,7 +381,7 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
 export default function ProfileScreen() {
   const { accent, setAccent, showToast } = useApp();
   const { user, logout } = useAuth();
-  const { family, profile, saveProfile } = useFamily();
+  const { family, profile, members, saveProfile } = useFamily();
   const navigate = useNavigate();
 
   const [editOpen,     setEditOpen]     = useState(false);
@@ -462,9 +462,9 @@ export default function ProfileScreen() {
     }
   };
 
-  const members = [];
-  if (user?.name) members.push({ name: user.name, role: 'owner', colorIdx: 0 });
-  if (family.partner_name) members.push({ name: family.partner_name, role: 'partner', colorIdx: 1 });
+  const memberRows = [];
+  if (user?.name) memberRows.push({ name: user.name, role: 'owner', colorIdx: 0 });
+  if (family.partner_name) memberRows.push({ name: family.partner_name, role: 'partner', colorIdx: 1 });
 
   return (
     <div style={{
@@ -512,9 +512,9 @@ export default function ProfileScreen() {
       <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
         <div className="kr-en" style={{ marginBottom: 10 }}>FAMILY · 가족</div>
 
-        {members.length > 0 ? (
+        {memberRows.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {members.map((m, i) => (
+            {memberRows.map((m, i) => (
               <MemberRow key={m.name + i} {...m} />
             ))}
           </div>
@@ -564,104 +564,109 @@ export default function ProfileScreen() {
       {/* 파트너 초대 */}
       {family.type !== 'solo' && (
         <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
-          <div className="kr-en" style={{ marginBottom: 10 }}>INVITE · 파트너 초대</div>
+          <div className="kr-en" style={{ marginBottom: 12 }}>INVITE · 파트너 초대</div>
 
-          {/* 이미 연결된 경우 */}
-          {family.partner_name ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 0' }}>
-              <div style={{
-                width: 36, height: 36, borderRadius: '50%', background: accent,
-                color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 14, fontWeight: 700, flexShrink: 0,
-              }}>
-                {family.partner_name[0]}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{family.partner_name}님과 연결됨</div>
-                <div className="kr-en" style={{ marginTop: 1 }}>Connected partner</div>
-              </div>
-              <span style={{
-                fontSize: 10, padding: '3px 8px', borderRadius: 6,
-                background: 'rgba(111,142,90,0.12)', color: '#4A7A3A', fontWeight: 700,
-              }}>연결됨</span>
-            </div>
-          ) : (
-            <>
-              <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.6, marginBottom: 14 }}>
-                파트너를 초대하면 식단과 장보기 목록을 함께 관리할 수 있어요.
-              </div>
-
-              {/* 초대 링크 생성 전 */}
-              {inviteState !== 'ready' && (
-                <button
-                  onClick={loadInvite}
-                  disabled={inviteState === 'loading'}
-                  style={{
-                    width: '100%', padding: '12px 0', borderRadius: 12,
-                    background: inviteState === 'loading' ? 'var(--ink-4)' : accent,
-                    color: '#fff', fontSize: 13.5, fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    boxShadow: inviteState === 'loading' ? 'none' : `0 4px 14px ${accent}4D`,
-                  }}
-                >
-                  {inviteState === 'loading' ? (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                      <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
-                      <path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
-                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite"/>
-                      </path>
-                    </svg>
-                  ) : Icon.spark(15)}
-                  {inviteState === 'loading' ? '링크 생성 중…' : '초대 링크 만들기'}
-                </button>
-              )}
-
-              {/* 초대 링크 생성 후 */}
-              {inviteState === 'ready' && inviteUrl && (
-                <div>
-                  {/* 링크 표시 */}
-                  <div style={{
-                    background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10,
-                    padding: '11px 12px', marginBottom: 8,
-                    fontSize: 11.5, color: 'var(--ink-2)', fontFamily: 'var(--font-mono)',
-                    wordBreak: 'break-all', lineHeight: 1.5,
-                  }}>
-                    {inviteUrl}
-                  </div>
-                  {inviteExp && (
-                    <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 10 }}>
-                      {new Date(inviteExp).toLocaleDateString('ko-KR')}까지 유효 · 1회 사용
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={copyLink}
-                      style={{
-                        flex: 1, padding: '12px 0', borderRadius: 10, fontSize: 13, fontWeight: 700,
-                        background: copied ? 'rgba(111,142,90,0.12)' : 'var(--bg)',
-                        color: copied ? '#4A7A3A' : 'var(--ink-2)',
-                        border: `1px solid ${copied ? '#4A7A3A' : 'var(--line)'}`,
-                        transition: 'all 200ms',
-                      }}
-                    >
-                      {copied ? '복사됨 ✓' : '링크 복사'}
-                    </button>
-                    {typeof navigator !== 'undefined' && navigator.share && (
-                      <button
-                        onClick={shareLink}
-                        style={{
-                          flex: 1, padding: '12px 0', borderRadius: 10, fontSize: 13, fontWeight: 700,
-                          background: accent, color: '#fff',
-                          boxShadow: `0 3px 10px ${accent}4D`,
-                        }}
-                      >
-                        공유하기
-                      </button>
-                    )}
+          {/* 파트너 멤버 목록 */}
+          {members.filter(m => m.role !== 'owner').map((m, i) => (
+            <div key={m.id} style={{ marginBottom: i < members.filter(x => x.role !== 'owner').length - 1 ? 12 : 0 }}>
+              {/* 멤버 행 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: m.status === 'pending' ? 10 : 0 }}>
+                <div style={{
+                  width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                  background: m.status === 'active' ? accent : 'var(--bg-2)',
+                  color: m.status === 'active' ? '#fff' : 'var(--ink-3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 15, fontWeight: 700,
+                }}>
+                  {m.name[0]}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{m.name}</div>
+                  <div className="kr-en" style={{ marginTop: 1 }}>
+                    {m.status === 'active' ? 'Connected partner' : 'Invite pending'}
                   </div>
                 </div>
+                <span style={{
+                  fontSize: 10, padding: '3px 9px', borderRadius: 6, fontWeight: 700,
+                  background: m.status === 'active' ? 'rgba(111,142,90,0.12)' : 'var(--bg-2)',
+                  color: m.status === 'active' ? '#4A7A3A' : 'var(--ink-3)',
+                }}>
+                  {m.status === 'active' ? '연결됨' : '초대 대기'}
+                </span>
+              </div>
+
+              {/* pending 멤버: 초대 링크 UI */}
+              {m.status === 'pending' && (
+                <>
+                  {inviteState !== 'ready' && (
+                    <button
+                      onClick={loadInvite}
+                      disabled={inviteState === 'loading'}
+                      style={{
+                        width: '100%', padding: '11px 0', borderRadius: 12,
+                        background: inviteState === 'loading' ? 'var(--ink-4)' : accent,
+                        color: '#fff', fontSize: 13, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                        boxShadow: inviteState === 'loading' ? 'none' : `0 4px 14px ${accent}4D`,
+                      }}
+                    >
+                      {inviteState === 'loading' ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+                          <path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                            <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite"/>
+                          </path>
+                        </svg>
+                      ) : Icon.spark(14)}
+                      {inviteState === 'loading' ? '링크 생성 중…' : `${m.name}님 초대하기`}
+                    </button>
+                  )}
+
+                  {inviteState === 'ready' && inviteUrl && (
+                    <div>
+                      <div style={{
+                        background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10,
+                        padding: '10px 12px', marginBottom: 8,
+                        fontSize: 11, color: 'var(--ink-2)', fontFamily: 'var(--font-mono)',
+                        wordBreak: 'break-all', lineHeight: 1.5,
+                      }}>{inviteUrl}</div>
+                      {inviteExp && (
+                        <div style={{ fontSize: 11, color: 'var(--ink-4)', marginBottom: 8 }}>
+                          {new Date(inviteExp).toLocaleDateString('ko-KR')}까지 유효 · 1회 사용
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={copyLink} style={{
+                          flex: 1, padding: '11px 0', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                          background: copied ? 'rgba(111,142,90,0.12)' : 'var(--bg)',
+                          color: copied ? '#4A7A3A' : 'var(--ink-2)',
+                          border: `1px solid ${copied ? '#4A7A3A' : 'var(--line)'}`,
+                          transition: 'all 200ms',
+                        }}>
+                          {copied ? '복사됨 ✓' : '링크 복사'}
+                        </button>
+                        {typeof navigator !== 'undefined' && navigator.share && (
+                          <button onClick={shareLink} style={{
+                            flex: 1, padding: '11px 0', borderRadius: 10, fontSize: 13, fontWeight: 700,
+                            background: accent, color: '#fff',
+                          }}>공유하기</button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
-            </>
+            </div>
+          ))}
+
+          {/* 파트너 멤버가 없을 때 (가족 설정에서 이름 안 넣은 경우) */}
+          {members.filter(m => m.role !== 'owner').length === 0 && (
+            <div style={{ fontSize: 13, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+              파트너를 초대하면 식단과 장보기 목록을 함께 관리할 수 있어요.{' '}
+              <button onClick={() => setEditOpen(true)} style={{ color: accent, fontWeight: 700, fontSize: 13 }}>
+                가족 설정에서 파트너 이름을 추가해 주세요.
+              </button>
+            </div>
           )}
         </div>
       )}

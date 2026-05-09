@@ -21,11 +21,11 @@ ALTER TABLE recipes
 CREATE TABLE IF NOT EXISTS invite_tokens (
   id          UUID        DEFAULT gen_random_uuid() PRIMARY KEY,
   token       TEXT        UNIQUE NOT NULL DEFAULT encode(gen_random_bytes(16), 'hex'),
-  invited_by  UUID        REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+  invited_by  TEXT        REFERENCES users(id) ON DELETE CASCADE NOT NULL,
   created_at  TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   expires_at  TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days') NOT NULL,
   accepted_at TIMESTAMPTZ,
-  accepted_by UUID        REFERENCES users(id) ON DELETE SET NULL
+  accepted_by TEXT        REFERENCES users(id) ON DELETE SET NULL
 );
 
 -- 인덱스

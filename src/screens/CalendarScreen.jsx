@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MEAL_TYPES, DAYS_KR } from '../data';
 import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
+import { useAuth } from '../context/AuthContext';
 import Icon from '../icons';
 
 const TOKEN_KEY = 'cookingMaster_token';
@@ -152,7 +153,9 @@ export default function CalendarScreen() {
 
   const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion, showToast } = useApp();
   const { family } = useFamily();
+  const { user } = useAuth();
   const navigate = useNavigate();
+  const myUserId = user?.id;
 
   const weekDates = useMemo(() => getWeekDates(week), [week]);
   const weekStart = toDateStr(weekDates[0]);
@@ -238,17 +241,34 @@ export default function CalendarScreen() {
           <div className="kr-en">MEAL PLAN · 식단 관리</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink)', marginTop: 2, letterSpacing: '-0.01em' }}>{family.name}</div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {/* 내 아바타 */}
           <div style={{
             width: 34, height: 34, borderRadius: '50%',
             background: 'var(--accent)', color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
             border: '2px solid var(--bg)',
           }}>{family.initial}</div>
-          <button onClick={() => navigate('/onboarding')} style={{
-            width: 34, height: 34, borderRadius: '50%', border: '1px dashed var(--ink-4)',
-            color: 'var(--ink-3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>{Icon.plus(14)}</button>
+
+          {family.partner_connected ? (
+            /* 파트너 연결됨: 파트너 아바타 */
+            <div style={{
+              width: 34, height: 34, borderRadius: '50%',
+              background: 'var(--ink-2)', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
+              border: '2px solid var(--bg)',
+            }} title={`${family.partner_name}님`}>
+              {family.partner_name?.[0] ?? '?'}
+            </div>
+          ) : family.type !== 'solo' ? (
+            /* 파트너 미연결: 초대 버튼 */
+            <button onClick={() => navigate('/profile')} style={{
+              width: 34, height: 34, borderRadius: '50%', border: '1px dashed var(--ink-4)',
+              color: 'var(--ink-3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }} title="파트너 초대">
+              {Icon.plus(14)}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -399,7 +419,12 @@ export default function CalendarScreen() {
                         <div style={{ fontWeight: 600, fontSize: 10.5, wordBreak: 'keep-all' }}>{meal.menu_name}</div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
                           <span style={{ fontSize: 9, opacity: 0.7, fontFamily: 'var(--font-mono)' }}>{meal.kcal}</span>
-                          {meal.is_baby && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--baby)' }} />}
+                          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                            {meal.is_baby && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--baby)' }} />}
+                            {family.partner_connected && myUserId && meal.user_id && meal.user_id !== myUserId && (
+                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--ink-3)' }} title={`${family.partner_name}님이 설정`} />
+                            )}
+                          </div>
                         </div>
                       </>
                     )}
@@ -418,6 +443,11 @@ export default function CalendarScreen() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 14, height: 8, borderRadius: 3, background: 'var(--ink)' }} />오늘
           </div>
+          {family.partner_connected && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--ink-3)' }} />{family.partner_name}님 식단
+            </div>
+          )}
         </div>
       </div>
 

@@ -40,13 +40,9 @@ function toDateStr(d) {
   return d.toISOString().slice(0, 10);
 }
 
-async function seedDefaultPlan(userId) {
+async function seedDefaultPlan(userId, familyGroupId = null) {
   const monday = getMonday(0);
-
-  // Get all recipe kcal/baby info in one query
-  const { data: recipeRows } = await db.supabase
-    .from('recipes')
-    .select('name, kcal, baby');
+  const { data: recipeRows } = await db.supabase.from('recipes').select('name, kcal, baby');
   const recipeMap = Object.fromEntries((recipeRows ?? []).map(r => [r.name, r]));
 
   const rows = [];
@@ -57,19 +53,28 @@ async function seedDefaultPlan(userId) {
       if (!menuName) continue;
       const recipe = recipeMap[menuName] ?? {};
       rows.push({
-        user_id:   userId,
-        plan_date: planDate,
-        meal_type: MEAL_TYPES[mt],
-        menu_name: menuName,
-        kcal:      recipe.kcal ?? null,
-        is_baby:   recipe.baby ?? false,
+        user_id:         userId,
+        plan_date:       planDate,
+        meal_type:       MEAL_TYPES[mt],
+        menu_name:       menuName,
+        kcal:            recipe.kcal ?? null,
+        is_baby:         recipe.baby ?? false,
+        family_group_id: familyGroupId,
       });
     }
   }
+  await db.supabase.from('meal_plans').upsert(rows, { onConflict: 'user_id,plan_date,meal_type' });
+}
 
-  await db.supabase
-    .from('meal_plans')
-    .upsert(rows, { onConflict: 'user_id,plan_date,meal_type' });
+async function getUserGroupStatus(userId) {
+  const { data: prof } = await db.supabase
+    .from('user_profiles').select('family_group_id').eq('user_id', userId).maybeSingle();
+  const groupId = prof?.family_group_id ?? null;
+  if (!groupId) return { groupId: null, isConnected: false };
+
+  const { data: member } = await db.supabase
+    .from('family_members').select('status').eq('family_group_id', groupId).eq('user_id', userId).maybeSingle();
+  return { groupId, isConnected: member?.status === 'active' };
 }
 
 export default async function handler(req, res) {
@@ -78,63 +83,98 @@ export default async function handler(req, res) {
   const userId = payload.userId;
 
   try {
-    // GET /api/meals?week_start=YYYY-MM-DD
+    // ── GET /api/meals?week_start=YYYY-MM-DD ─────────────────
     if (req.method === 'GET') {
       const { week_start } = req.query;
       if (!week_start) return res.status(400).json({ error: 'week_start required' });
-
       const weekEnd = toDateStr(addDays(new Date(week_start), 6));
 
-      // First-time seed: check if user has ANY meals
-      const { data: existing } = await db.supabase
-        .from('meal_plans')
-        .select('id')
-        .eq('user_id', userId)
-        .limit(1);
+      const { groupId, isConnected } = await getUserGroupStatus(userId);
 
-      if (!existing || existing.length === 0) {
-        await seedDefaultPlan(userId);
+      // 시드 필요 여부 확인
+      const { data: userMeals } = await db.supabase
+        .from('meal_plans').select('id').eq('user_id', userId).limit(1);
+
+      if (!userMeals || userMeals.length === 0) {
+        if (isConnected && groupId) {
+          // 가족 식단이 이미 있는지 확인 (파트너가 이미 식단 가짐)
+          const { data: groupMeals } = await db.supabase
+            .from('meal_plans').select('id').eq('family_group_id', groupId).limit(1);
+          if (!groupMeals || groupMeals.length === 0) {
+            await seedDefaultPlan(userId, groupId);
+          }
+          // 파트너 식단이 있으면 시드 안 함 (공유 식단 사용)
+        } else {
+          await seedDefaultPlan(userId, null);
+        }
       }
 
-      const { data, error } = await db.supabase
-        .from('meal_plans')
-        .select('*')
-        .eq('user_id', userId)
-        .gte('plan_date', week_start)
-        .lte('plan_date', weekEnd)
-        .order('plan_date')
-        .order('meal_type');
+      // 식단 조회: 연결된 경우 가족 그룹 식단 + 아직 태그 안 된 내 식단
+      let meals = [];
+      if (isConnected && groupId) {
+        const [{ data: groupRows }, { data: myUntagged }] = await Promise.all([
+          db.supabase.from('meal_plans').select('*')
+            .eq('family_group_id', groupId)
+            .gte('plan_date', week_start).lte('plan_date', weekEnd)
+            .order('plan_date').order('meal_type'),
+          db.supabase.from('meal_plans').select('*')
+            .eq('user_id', userId).is('family_group_id', null)
+            .gte('plan_date', week_start).lte('plan_date', weekEnd),
+        ]);
+        // 병합 (그룹 식단 우선)
+        const map = {};
+        for (const m of (myUntagged ?? [])) map[`${m.plan_date}_${m.meal_type}`] = m;
+        for (const m of (groupRows ?? [])) map[`${m.plan_date}_${m.meal_type}`] = m;
+        meals = Object.values(map).sort((a, b) => a.plan_date.localeCompare(b.plan_date) || a.meal_type.localeCompare(b.meal_type));
+      } else {
+        const { data, error } = await db.supabase.from('meal_plans').select('*')
+          .eq('user_id', userId)
+          .gte('plan_date', week_start).lte('plan_date', weekEnd)
+          .order('plan_date').order('meal_type');
+        if (error) throw error;
+        meals = data ?? [];
+      }
 
-      if (error) throw error;
-      return res.json({ meals: data ?? [] });
+      return res.json({ meals, family_group_id: groupId, is_connected: isConnected });
     }
 
-    // PUT /api/meals — upsert one slot
+    // ── PUT /api/meals — 슬롯 저장 ───────────────────────────
     if (req.method === 'PUT') {
       const { plan_date, meal_type, menu_name } = req.body ?? {};
-      if (!plan_date || !meal_type) {
-        return res.status(400).json({ error: 'plan_date and meal_type required' });
-      }
+      if (!plan_date || !meal_type) return res.status(400).json({ error: 'plan_date and meal_type required' });
 
-      let kcal = null;
-      let is_baby = false;
+      let kcal = null, is_baby = false;
       if (menu_name) {
-        const { data: recipe } = await db.supabase
-          .from('recipes')
-          .select('kcal, baby')
-          .eq('name', menu_name)
-          .maybeSingle();
+        const { data: recipe } = await db.supabase.from('recipes')
+          .select('kcal, baby').eq('name', menu_name).maybeSingle();
         if (recipe) { kcal = recipe.kcal; is_baby = recipe.baby; }
       }
 
-      const { error } = await db.supabase
-        .from('meal_plans')
-        .upsert(
+      const { groupId, isConnected } = await getUserGroupStatus(userId);
+
+      if (isConnected && groupId) {
+        // 공유 식단: family_group_id + date + type 기준으로 찾아서 update or insert
+        const { data: existingMeal } = await db.supabase.from('meal_plans').select('id')
+          .eq('family_group_id', groupId).eq('plan_date', plan_date).eq('meal_type', meal_type).maybeSingle();
+
+        if (existingMeal) {
+          const { error } = await db.supabase.from('meal_plans')
+            .update({ user_id: userId, menu_name: menu_name ?? null, kcal, is_baby })
+            .eq('id', existingMeal.id);
+          if (error) throw error;
+        } else {
+          const { error } = await db.supabase.from('meal_plans')
+            .insert({ user_id: userId, plan_date, meal_type, menu_name: menu_name ?? null, kcal, is_baby, family_group_id: groupId });
+          if (error) throw error;
+        }
+      } else {
+        const { error } = await db.supabase.from('meal_plans').upsert(
           { user_id: userId, plan_date, meal_type, menu_name: menu_name ?? null, kcal, is_baby },
           { onConflict: 'user_id,plan_date,meal_type' },
         );
+        if (error) throw error;
+      }
 
-      if (error) throw error;
       return res.json({ ok: true });
     }
 

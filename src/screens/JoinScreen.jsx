@@ -49,6 +49,8 @@ export default function JoinScreen() {
       });
   }, [token]);
 
+  const [conflictCount, setConflictCount] = useState(0);
+
   const accept = async () => {
     // 로그인 안 된 경우 → 토큰 저장 후 로그인 이동
     if (!isAuthenticated) {
@@ -65,6 +67,7 @@ export default function JoinScreen() {
       });
       await loadProfile();
       setInviter(prev => ({ ...prev, name: result.partner_name ?? prev?.name }));
+      setConflictCount(result.conflict_count ?? 0);
       setState('done');
     } catch (e) {
       setState('error');
@@ -180,7 +183,7 @@ export default function JoinScreen() {
 
       {/* ── 완료 ── */}
       {state === 'done' && (
-        <div style={{ textAlign: 'center', maxWidth: 320 }}>
+        <div style={{ textAlign: 'center', maxWidth: 340 }}>
           <div style={{ width: 72, height: 72, borderRadius: 22, background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', boxShadow: '0 8px 24px rgba(200,101,74,0.3)' }}>
             <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round">
               <polyline points="20 6 9 17 4 12"/>
@@ -189,9 +192,25 @@ export default function JoinScreen() {
           <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', marginBottom: 8 }}>
             연결됐어요! 🎉
           </div>
-          <div style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.65, marginBottom: 32 }}>
+          <div style={{ fontSize: 14, color: 'var(--ink-3)', lineHeight: 1.65, marginBottom: conflictCount > 0 ? 16 : 32 }}>
             {inviter?.name}님과 가족 식단을 함께 관리할 수 있어요.
           </div>
+
+          {/* 식단 충돌 안내 */}
+          {conflictCount > 0 && (
+            <div style={{
+              background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 14,
+              padding: '14px 16px', marginBottom: 28, textAlign: 'left',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', marginBottom: 4 }}>
+                식단 {conflictCount}개가 자동으로 합쳐졌어요
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+                겹치는 식단은 {inviter?.name}님 식단으로 통일됐어요. 캘린더에서 원하는 메뉴로 바꿀 수 있어요.
+              </div>
+            </div>
+          )}
+
           <button onClick={() => navigate('/calendar')} style={{ width: '100%', padding: '15px 0', borderRadius: 14, background: 'var(--accent)', color: '#fff', fontSize: 15, fontWeight: 700 }}>
             식단 캘린더 보기
           </button>
