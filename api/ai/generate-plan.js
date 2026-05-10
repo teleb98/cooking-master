@@ -55,14 +55,27 @@ export default async function handler(req, res) {
       `${r.name}(${r.kcal}kcal${r.baby ? ',이유식가능' : ''})`
     ).join(', ');
 
-    const likesText   = foodLikes.length  > 0 ? foodLikes.join(', ')  : '제한 없음';
-    const allergyText = allergies.length  > 0 ? allergies.join(', ')  : '없음';
+    // food_likes를 레시피 목록과 대조해 즐겨찾는 메뉴와 선호 재료로 분리
+    const recipeNameSet = new Set(allRecipes.map(r => r.name));
+    const likedMenus = foodLikes.filter(l => recipeNameSet.has(l));
+    const likedHints = foodLikes.filter(l => !recipeNameSet.has(l));
+
+    const allergyText    = allergies.length  > 0 ? allergies.join(', ')  : '없음';
+    const likedMenusLine = likedMenus.length > 0
+      ? `- 즐겨찾는 메뉴 (2주 식단에 각 메뉴 최소 1회 이상 반드시 배치): ${likedMenus.join(', ')}`
+      : '';
+    const likedHintsLine = likedHints.length > 0
+      ? `- 선호 재료·스타일 (관련 메뉴 우선): ${likedHints.join(', ')}`
+      : '';
+    const noPrefsLine    = !likedMenusLine && !likedHintsLine ? '- 취향: 제한 없음' : '';
 
     const userPrompt = `다음 조건으로 ${dates[0]}부터 ${dates[13]}까지 2주 식단을 생성하세요.
 
 사용자 정보:
 - 가족 유형: ${FAMILY_DESC[familyType] ?? familyType}
-- 좋아하는 재료/음식: ${likesText}
+${likedMenusLine}
+${likedHintsLine}
+${noPrefsLine}
 - 알레르기·피해야 할 재료: ${allergyText}
 ${hasBaby ? '- 영·유아 포함 가족: 이유식 가능 표시 메뉴 우선 고려' : ''}
 
@@ -72,10 +85,11 @@ ${recipeList}
 규칙:
 1. 반드시 위 레시피 목록에 있는 메뉴명 그대로 사용
 2. 알레르기 재료 포함 메뉴는 절대 포함 금지
-3. 좋아하는 재료가 포함된 메뉴를 더 자주 배치
-4. 같은 메뉴를 3일 이상 연속 배치 금지
-5. 아침은 비교적 간단한 메뉴 위주
-6. 14일 × 아침·점심·저녁 = 총 42개 항목 전부 포함
+3. 즐겨찾는 메뉴가 있으면 2주 내 각 메뉴를 최소 1회 이상 배치하고, 선호도가 높은 메뉴는 더 자주 반영
+4. 선호 재료가 포함된 메뉴를 다른 메뉴보다 우선 배치
+5. 같은 메뉴를 3일 이상 연속 배치 금지
+6. 아침은 비교적 간단한 메뉴 위주
+7. 14일 × 아침·점심·저녁 = 총 42개 항목 전부 포함
 
 JSON 형식으로만 응답 (설명 없이):
 {"plan":[{"plan_date":"YYYY-MM-DD","meal_type":"breakfast","menu_name":"메뉴명"},...]}`;;

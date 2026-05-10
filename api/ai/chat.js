@@ -126,9 +126,17 @@ export default async function handler(req, res) {
 ${hasBaby ? `- 아기(${babyMonths}개월, ${babyMonths < 6 ? '초기' : babyMonths < 9 ? '중기' : babyMonths < 12 ? '후기' : '완료기'} 이유식)에 맞는 이유식 분기를 자동 안내합니다.` : ''}
 - 영양 균형과 아이 친화적 식재료를 고려합니다.`;
 
-    const prefSection = (foodLikes.length > 0 || allergies.length > 0)
-      ? `\n사용자 취향:\n${foodLikes.length  > 0 ? `- 좋아하는 재료: ${foodLikes.join(', ')}` : ''}${allergies.length > 0 ? `\n- 알레르기·피해야 할 재료: ${allergies.join(', ')} (이 재료가 포함된 메뉴는 절대 추천하지 말 것)` : ''}`
-      : '';
+    // food_likes를 레시피 목록과 대조해 즐겨찾는 메뉴와 선호 힌트로 분리
+    const recipeNameSet = new Set(allRecipes.map(r => r.name));
+    const likedMenus = foodLikes.filter(l => recipeNameSet.has(l));
+    const likedHints = foodLikes.filter(l => !recipeNameSet.has(l));
+
+    const prefLines = [];
+    if (likedMenus.length > 0) prefLines.push(`- 즐겨찾는 메뉴 (식단 수정 시 우선 반영, 가능하면 포함): ${likedMenus.join(', ')}`);
+    if (likedHints.length  > 0) prefLines.push(`- 선호 재료·스타일: ${likedHints.join(', ')}`);
+    if (allergies.length   > 0) prefLines.push(`- 알레르기·피해야 할 재료: ${allergies.join(', ')} (이 재료가 포함된 메뉴는 절대 추천하지 말 것)`);
+
+    const prefSection = prefLines.length > 0 ? `\n사용자 취향:\n${prefLines.join('\n')}` : '';
 
     const systemPrompt = `당신은 한국 가족의 식단 관리를 돕는 AI 어시스턴트 'Cooking Master'입니다.
 
