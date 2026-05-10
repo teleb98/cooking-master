@@ -4,9 +4,9 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
 import { FOOD_CHIPS, ALLERGY_CHIPS } from '../data';
+import Icon from '../icons';
 
 const FOOD_CHIPS_SET = new Set(FOOD_CHIPS);
-import Icon from '../icons';
 
 const TOKEN_KEY = 'cookingMaster_token';
 
@@ -294,43 +294,6 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
               </div>
             </div>
           )}
-
-          {/* 좋아하는 메뉴 */}
-          <div style={{ marginBottom: 22 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <FieldLabel>좋아하는 메뉴</FieldLabel>
-              {Array.from(likes).filter(l => !FOOD_CHIPS_SET.has(l)).length > 0 && (
-                <span style={{ fontSize: 11, color: accent, fontWeight: 700 }}>
-                  {Array.from(likes).filter(l => !FOOD_CHIPS_SET.has(l)).length}개
-                </span>
-              )}
-            </div>
-            {Array.from(likes).filter(l => !FOOD_CHIPS_SET.has(l)).length === 0 ? (
-              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', padding: '10px 0' }}>
-                아직 추가된 메뉴가 없어요 · 레시피에서 추가해보세요
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                {Array.from(likes).filter(l => !FOOD_CHIPS_SET.has(l)).map(item => (
-                  <div key={item} style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '6px 10px 6px 12px', borderRadius: 999,
-                    background: `${accent}18`, border: `1px solid ${accent}44`,
-                  }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)' }}>{item}</span>
-                    <button
-                      onClick={() => toggleLike(item)}
-                      style={{ display: 'flex', alignItems: 'center', color: 'var(--ink-4)', padding: 2 }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
           {/* 좋아하는 재료 */}
           <div style={{ marginBottom: 22 }}>
@@ -709,6 +672,46 @@ export default function ProfileScreen() {
           )}
         </div>
       )}
+
+      {/* 좋아하는 메뉴 */}
+      <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div className="kr-en">FAVORITES · 좋아하는 메뉴</div>
+          {(profile.food_likes ?? []).filter(l => !FOOD_CHIPS_SET.has(l)).length > 0 && (
+            <span style={{ fontSize: 11, color: accent, fontWeight: 700 }}>
+              {(profile.food_likes ?? []).filter(l => !FOOD_CHIPS_SET.has(l)).length}개
+            </span>
+          )}
+        </div>
+        {(profile.food_likes ?? []).filter(l => !FOOD_CHIPS_SET.has(l)).length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--ink-3)', lineHeight: 1.6 }}>
+            아직 추가된 메뉴가 없어요{'\n'}레시피에서 ♡ 버튼으로 추가해보세요
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+            {(profile.food_likes ?? []).filter(l => !FOOD_CHIPS_SET.has(l)).map(item => (
+              <div key={item} style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '7px 10px 7px 13px', borderRadius: 999,
+                background: `${accent}18`, border: `1px solid ${accent}44`,
+              }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{item}</span>
+                <button
+                  onClick={async () => {
+                    const next = (profile.food_likes ?? []).filter(l => l !== item);
+                    await saveProfile({ food_likes: next });
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', color: 'var(--ink-4)', padding: 2 }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* 장보는 요일 */}
       <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
