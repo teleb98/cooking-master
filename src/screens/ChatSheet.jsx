@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
@@ -168,16 +168,20 @@ function MessageBubble({ m, accent, onApply, onGoGrocery }) {
   );
 }
 
+const hasSpeech = typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
 /* ── 메인 컴포넌트 ────────────────────────────────────────────── */
 export default function ChatSheet() {
   const { chatOpen, setChatOpen, accent, bumpMealVersion, showToast } = useApp();
   const { family } = useFamily();
   const navigate = useNavigate();
-  const [input, setInput]     = useState('');
+  const [input, setInput]       = useState('');
   const [messages, setMessages] = useState([]);
-  const [sending, setSending]  = useState(false);
-  const bottomRef  = useRef(null);
-  const historyRef = useRef([]);
+  const [sending, setSending]   = useState(false);
+  const [listening, setListening] = useState(false);
+  const bottomRef      = useRef(null);
+  const historyRef     = useRef([]);
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     if (chatOpen) {
@@ -185,8 +189,34 @@ export default function ChatSheet() {
       setMessages([{ from: 'ai', kind: 'text', text: greeting }]);
       historyRef.current = [{ from: 'ai', text: greeting }];
       setInput('');
+    } else {
+      recognitionRef.current?.abort();
+      setListening(false);
     }
   }, [chatOpen, family.name]);
+
+  const toggleListen = useCallback(() => {
+    if (listening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SR();
+    recognition.lang = 'ko-KR';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onstart = () => setListening(true);
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+      setInput(transcript);
+    };
+    recognition.onend = () => setListening(false);
+    recognition.onerror = () => setListening(false);
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [listening]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -280,16 +310,49 @@ export default function ChatSheet() {
 
       {/* 입력창 */}
       <div style={{ borderTop: '1px solid var(--line)', padding: '10px 14px 14px', display: 'flex', gap: 8, alignItems: 'center', background: 'var(--surface)' }}>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 999, padding: '10px 16px' }}>
+        <div style={{
+          flex: 1, display: 'flex', alignItems: 'center',
+          background: 'var(--bg)',
+          border: `1px solid ${listening ? accent : 'var(--line)'}`,
+          borderRadius: 999, padding: '10px 16px',
+          transition: 'border-color 200ms',
+        }}>
           <input
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !sending) send(input); }}
-            placeholder="메시지 입력 · message"
+            placeholder={listening ? '듣고 있어요…' : '메시지 입력 · message'}
             disabled={sending}
             style={{ flex: 1, border: 'none', outline: 'none', background: 'none', fontSize: 14, color: 'var(--ink)' }}
           />
+          {listening && (
+            <span style={{ display: 'flex', gap: 3, alignItems: 'center', marginLeft: 8 }}>
+              {[0, 1, 2].map(i => (
+                <span key={i} style={{
+                  width: 3, height: 3, borderRadius: '50%', background: accent,
+                  animation: `bounce 1s ${i * 0.15}s ease-in-out infinite`,
+                }} />
+              ))}
+            </span>
+          )}
         </div>
+        {hasSpeech && (
+          <button
+            onClick={toggleListen}
+            disabled={sending}
+            style={{
+              width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
+              background: listening ? accent : 'var(--surface)',
+              border: listening ? 'none' : '1px solid var(--line)',
+              color: listening ? '#fff' : 'var(--ink-3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: listening ? `0 4px 14px ${accent}66` : 'none',
+              transition: 'background 200ms, box-shadow 200ms',
+            }}
+          >
+            {Icon.mic(18)}
+          </button>
+        )}
         <button
           onClick={() => send(input)}
           disabled={sending || !input.trim()}
@@ -297,7 +360,7 @@ export default function ChatSheet() {
             width: 44, height: 44, borderRadius: '50%',
             background: sending || !input.trim() ? 'var(--ink-4)' : accent,
             color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: sending ? 'none' : `0 4px 12px ${accent}4D`,
+            boxShadow: sending || !input.trim() ? 'none' : `0 4px 12px ${accent}4D`,
             flexShrink: 0, transition: 'background 150ms',
           }}
         >{Icon.send(18)}</button>
