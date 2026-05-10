@@ -170,7 +170,7 @@ function MessageBubble({ m, accent, onApply, onGoGrocery }) {
 
 /* ── 메인 컴포넌트 ────────────────────────────────────────────── */
 export default function ChatSheet() {
-  const { chatOpen, setChatOpen, accent, bumpMealVersion } = useApp();
+  const { chatOpen, setChatOpen, accent, bumpMealVersion, showToast } = useApp();
   const { family } = useFamily();
   const navigate = useNavigate();
   const [input, setInput]     = useState('');
@@ -205,7 +205,10 @@ export default function ChatSheet() {
       )
     );
     const ok = results.filter(r => r.status === 'fulfilled' && r.value.ok).length;
-    if (ok > 0) bumpMealVersion();
+    if (ok > 0) {
+      bumpMealVersion();
+      showToast(`${ok}개 식단이 캘린더에 반영됐어요`, 'success');
+    }
     return ok;
   };
 
