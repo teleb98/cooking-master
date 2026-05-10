@@ -1,5 +1,6 @@
 /**
- * API handler tests for /api/grocery and /api/grocery/generate
+ * API handler tests for /api/grocery
+ * NOTE: grocery/generate.js was merged into grocery/index.js as POST handler.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -18,8 +19,7 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => supabaseMock,
 }));
 
-const { default: groceryHandler }  = await import('../../api/grocery/index.js');
-const { default: generateHandler } = await import('../../api/grocery/generate.js');
+const { default: groceryHandler } = await import('../../api/grocery/index.js');
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 function makeReq({ method = 'GET', query = {}, body = {}, token = 'valid-token' } = {}) {
@@ -35,21 +35,23 @@ function makeRes() {
 function chainQuery(data, error = null) {
   const terminal = { data, error };
   const chain = {
-    select:  vi.fn().mockReturnThis(),
-    insert:  vi.fn().mockReturnThis(),
-    upsert:  vi.fn().mockReturnThis(),
-    update:  vi.fn().mockReturnThis(),
-    delete:  vi.fn().mockReturnThis(),
-    eq:      vi.fn().mockReturnThis(),
-    gte:     vi.fn().mockReturnThis(),
-    lte:     vi.fn().mockReturnThis(),
-    not:     vi.fn().mockReturnThis(),
-    in:      vi.fn().mockReturnThis(),
-    order:   vi.fn().mockReturnThis(),
-    limit:   vi.fn().mockReturnThis(),
+    select:      vi.fn().mockReturnThis(),
+    insert:      vi.fn().mockReturnThis(),
+    upsert:      vi.fn().mockReturnThis(),
+    update:      vi.fn().mockReturnThis(),
+    delete:      vi.fn().mockReturnThis(),
+    eq:          vi.fn().mockReturnThis(),
+    is:          vi.fn().mockReturnThis(),
+    gt:          vi.fn().mockReturnThis(),
+    gte:         vi.fn().mockReturnThis(),
+    lte:         vi.fn().mockReturnThis(),
+    not:         vi.fn().mockReturnThis(),
+    in:          vi.fn().mockReturnThis(),
+    order:       vi.fn().mockReturnThis(),
+    limit:       vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue(terminal),
     single:      vi.fn().mockResolvedValue(terminal),
-    then: (r) => Promise.resolve(terminal).then(r),
+    then:        (r) => Promise.resolve(terminal).then(r),
   };
   return chain;
 }
@@ -117,26 +119,21 @@ describe('DELETE /api/grocery', () => {
   });
 });
 
-// ── grocery/generate POST ─────────────────────────────────────────────────────
-describe('POST /api/grocery/generate', () => {
-  it('rejects non-POST', async () => {
-    const res = makeRes();
-    await generateHandler(makeReq({ method: 'GET', query: { week_start: '2025-05-05' } }), res);
-    expect(res._status).toBe(405);
-  });
-
+// ── grocery POST — 식단에서 장보기 목록 생성 (구 /api/grocery/generate) ────────
+describe('POST /api/grocery — generate from meals', () => {
   it('returns 400 when week_start missing', async () => {
     const res = makeRes();
-    await generateHandler(makeReq({ method: 'POST', body: {} }), res);
+    await groceryHandler(makeReq({ method: 'POST', body: {} }), res);
     expect(res._status).toBe(400);
+    expect(res._body.error).toMatch(/week_start/);
   });
 
-  it('returns empty items when no meals this week', async () => {
+  it('returns count:0 when no meals exist this week', async () => {
     supabaseMock.from.mockImplementation(() => chainQuery([]));
     const res = makeRes();
-    await generateHandler(makeReq({ method: 'POST', body: { week_start: '2025-05-05' } }), res);
+    await groceryHandler(makeReq({ method: 'POST', body: { week_start: '2025-05-05' } }), res);
     expect(res._status).toBe(200);
-    expect(res._body.items).toEqual([]);
+    expect(res._body.count).toBe(0);
   });
 
   it('generates grocery items from meals with ingredients', async () => {
@@ -147,7 +144,7 @@ describe('POST /api/grocery/generate', () => {
     const fakeRecipes = [
       {
         name: '소고기 미역국',
-        baby: true,
+        baby: false,
         ingredients: [
           { name: '소고기', qty: '200g' },
           { name: '미역',   qty: '30g' },
@@ -155,17 +152,49 @@ describe('POST /api/grocery/generate', () => {
       },
     ];
 
-    let callCount = 0;
     supabaseMock.from.mockImplementation((table) => {
-      callCount++;
-      if (table === 'meal_plans' && callCount === 1) return chainQuery(fakeMeals);
-      if (table === 'recipes')                       return chainQuery(fakeRecipes);
-      return chainQuery(null); // delete + insert
+      if (table === 'meal_plans') return chainQuery(fakeMeals);
+      if (table === 'recipes')    return chainQuery(fakeRecipes);
+      return chainQuery(null); // grocery_items delete + insert
     });
 
     const res = makeRes();
-    await generateHandler(makeReq({ method: 'POST', body: { week_start: '2025-05-05' } }), res);
+    await groceryHandler(makeReq({ method: 'POST', body: { week_start: '2025-05-05' } }), res);
     expect(res._status).toBe(200);
     expect(res._body.count).toBeGreaterThan(0);
+  });
+
+  it('deduplicates ingredients across repeated menus', async () => {
+    // 같은 메뉴가 두 번 나와도 재료는 중복되지 않아야 함
+    const fakeMeals = [
+      { menu_name: '비빔밥' },
+      { menu_name: '비빔밥' },
+    ];
+    const fakeRecipes = [
+      { name: '비빔밥', baby: false, ingredients: [{ name: '쌀', qty: '2컵' }] },
+    ];
+
+    supabaseMock.from.mockImplementation((table) => {
+      if (table === 'meal_plans') return chainQuery(fakeMeals);
+      if (table === 'recipes')    return chainQuery(fakeRecipes);
+      return chainQuery(null);
+    });
+
+    const res = makeRes();
+    await groceryHandler(makeReq({ method: 'POST', body: { week_start: '2025-05-05' } }), res);
+    // 쌀 하나만 생성 (2번 등장해도 1개 항목)
+    expect(res._body.count).toBe(1);
+  });
+
+  it('returns 401 when token is missing', async () => {
+    const res = makeRes();
+    await groceryHandler(makeReq({ method: 'POST', token: 'bad-token', body: { week_start: '2025-05-05' } }), res);
+    expect(res._status).toBe(401);
+  });
+
+  it('returns 405 for unsupported methods', async () => {
+    const res = makeRes();
+    await groceryHandler(makeReq({ method: 'PATCH' }), res);
+    expect(res._status).toBe(405);
   });
 });
