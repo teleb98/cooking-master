@@ -136,13 +136,14 @@ function StepsSection({ steps, loading, error, onRetry, accent }) {
 
 /* ── 메인 컴포넌트 ──────────────────────────────────────── */
 export default function RecipeSheet() {
-  const { recipe, setRecipe, accent, setReplaceSlot } = useApp();
+  const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion } = useApp();
   const { family } = useFamily();
 
   const [info, setInfo]           = useState(null);
   const [baseLoading, setBaseLoading] = useState(false);
   const [genLoading, setGenLoading]   = useState(false);
   const [genError, setGenError]       = useState(false);
+  const [deleting, setDeleting]       = useState(false);
 
   const name = recipe?.name ?? null;
   const [baseError, setBaseError] = useState(false);
@@ -193,6 +194,21 @@ export default function RecipeSheet() {
     const slot = { plan_date: recipe.plan_date, meal_type: recipe.meal_type };
     setRecipe(null);
     setReplaceSlot(slot);
+  };
+
+  const handleDelete = async () => {
+    if (!recipe?.plan_date) return;
+    setDeleting(true);
+    try {
+      await apiFetch('/meals', {
+        method: 'PUT',
+        body: JSON.stringify({ plan_date: recipe.plan_date, meal_type: recipe.meal_type, menu_name: null }),
+      });
+      setRecipe(null);
+      bumpMealVersion();
+    } catch {
+      setDeleting(false);
+    }
   };
 
   const MEAL_LABEL = { breakfast: '아침', lunch: '점심', dinner: '저녁' };
@@ -299,6 +315,15 @@ export default function RecipeSheet() {
 
             {/* 액션 버튼 */}
             <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
+              {recipe?.plan_date && (
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: deleting ? 'var(--ink-4)' : '#E53E3E', fontSize: 13, fontWeight: 600 }}
+                >
+                  {deleting ? '삭제 중…' : '메뉴 삭제'}
+                </button>
+              )}
               {recipe?.plan_date && (
                 <button
                   onClick={handleReplace}
