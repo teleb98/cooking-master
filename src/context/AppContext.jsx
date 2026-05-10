@@ -12,6 +12,9 @@ export function AppProvider({ children }) {
   const [recipe, setRecipe] = useState(null);
   // replaceSlot: set by RecipeSheet "교체" → CalendarScreen watches and opens MealPicker
   const [replaceSlot, setReplaceSlot] = useState(null);
+  // favoritesOpen: 즐겨찾기 시트 / favoriteSeed: RecipeSheet에서 열 때 미리 채울 메뉴명
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [favoriteSeed, setFavoriteSeed]   = useState(null);
   // mealVersion: incremented when meals are changed externally (e.g. AI chat apply)
   const [mealVersion, setMealVersion] = useState(0);
   const [toast, setToast] = useState(null);
@@ -43,7 +46,7 @@ export function AppProvider({ children }) {
   }, []);
 
   return (
-    <AppContext.Provider value={{ accent, setAccent, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, toast, showToast, onboarded, markOnboarded, clearOnboarded }}>
+    <AppContext.Provider value={{ accent, setAccent, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, toast, showToast, onboarded, markOnboarded, clearOnboarded, favoritesOpen, setFavoritesOpen, favoriteSeed, setFavoriteSeed }}>
       {children}
     </AppContext.Provider>
   );

@@ -136,7 +136,7 @@ function StepsSection({ steps, loading, error, onRetry, accent }) {
 
 /* ── 메인 컴포넌트 ──────────────────────────────────────── */
 export default function RecipeSheet() {
-  const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion } = useApp();
+  const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion, setFavoritesOpen, setFavoriteSeed } = useApp();
   const { family } = useFamily();
 
   const [info, setInfo]           = useState(null);
@@ -194,6 +194,12 @@ export default function RecipeSheet() {
     const slot = { plan_date: recipe.plan_date, meal_type: recipe.meal_type };
     setRecipe(null);
     setReplaceSlot(slot);
+  };
+
+  const handleFavorite = () => {
+    if (recipe?.name) setFavoriteSeed(recipe.name);
+    setRecipe(null);
+    setFavoritesOpen(true);
   };
 
   const handleDelete = async () => {
@@ -313,9 +319,9 @@ export default function RecipeSheet() {
               </>
             )}
 
-            {/* 액션 버튼 */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
-              {recipe?.plan_date && (
+            {/* 액션 버튼 — 1행: 삭제·교체, 2행: 즐겨찾기·확인 */}
+            {recipe?.plan_date && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
                 <button
                   onClick={handleDelete}
                   disabled={deleting}
@@ -323,18 +329,24 @@ export default function RecipeSheet() {
                 >
                   {deleting ? '삭제 중…' : '메뉴 삭제'}
                 </button>
-              )}
-              {recipe?.plan_date && (
                 <button
                   onClick={handleReplace}
                   style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}
                 >
                   메뉴 교체
                 </button>
-              )}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: recipe?.plan_date ? 8 : 24 }}>
+              <button
+                onClick={handleFavorite}
+                style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+              >
+                {Icon.heart(14)} 좋아하는 메뉴
+              </button>
               <button
                 onClick={() => setRecipe(null)}
-                style={{ flex: recipe?.plan_date ? 1 : undefined, width: recipe?.plan_date ? undefined : '100%', padding: '13px 0', borderRadius: 12, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}
+                style={{ flex: 1, padding: '13px 0', borderRadius: 12, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}
               >
                 확인
               </button>

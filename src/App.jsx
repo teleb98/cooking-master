@@ -12,6 +12,7 @@ import OnboardingScreen  from './screens/OnboardingScreen';
 import ProfileScreen     from './screens/ProfileScreen';
 import ChatSheet         from './screens/ChatSheet';
 import RecipeSheet       from './screens/RecipeSheet';
+import FavoritesSheet    from './screens/FavoritesSheet';
 import RecipeScreen      from './screens/RecipeScreen';
 import PrivacyScreen     from './screens/PrivacyScreen';
 import DataDeletionScreen from './screens/DataDeletionScreen';
@@ -165,6 +166,7 @@ function AppShell() {
 
       <ChatSheet />
       <RecipeSheet />
+      <FavoritesSheet />
       <GlobalToast />
 
       <Routes>
