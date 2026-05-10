@@ -93,10 +93,10 @@ export default function FavoritesSheet() {
       const base64 = await resizeToBase64(file);
       if (!base64) throw new Error('이미지 변환 실패');
       const token = localStorage.getItem(TOKEN_KEY);
-      const res   = await fetch('/api/ai/identify-food', {
+      const res   = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ image_base64: base64, mime_type: 'image/jpeg' }),
+        body: JSON.stringify({ identify_food: true, image_base64: base64, mime_type: 'image/jpeg' }),
       });
       const data = await res.json();
       if (data.name) {

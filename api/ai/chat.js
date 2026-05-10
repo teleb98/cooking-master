@@ -30,11 +30,47 @@ export default async function handler(req, res) {
   if (!payload) return res.status(401).json({ error: 'Unauthorized' });
   const userId = payload.userId;
 
-  const { message, history = [] } = req.body ?? {};
-  if (!message?.trim()) return res.status(400).json({ error: 'message required' });
+  const { message, history = [], identify_food, image_base64, mime_type } = req.body ?? {};
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(503).json({ error: 'AI 서비스가 설정되지 않았습니다.' });
+
+  // ── 음식 사진 인식 모드 ─────────────────────────────────────
+  if (identify_food) {
+    if (!image_base64) return res.status(400).json({ error: 'image_base64 required' });
+    try {
+      const visionRes = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [
+            { inlineData: { mimeType: mime_type ?? 'image/jpeg', data: image_base64 } },
+            { text: '이 사진에 있는 음식의 이름을 한국어로 알려주세요. 음식 이름만 짧게(1~4단어) 대답하세요. 음식이 아닌 경우 "알 수 없음"으로만 답하세요.' },
+          ]}],
+          generationConfig: { maxOutputTokens: 30, temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } },
+          safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+          ],
+        }),
+      });
+      if (!visionRes.ok) {
+        const s = visionRes.status;
+        if (s === 429) return res.status(429).json({ error: 'AI 요청이 너무 많습니다.' });
+        return res.status(502).json({ error: `AI 오류 (${s})` });
+      }
+      const vdata = await visionRes.json();
+      const vtext = vdata.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+      return res.json({ name: (!vtext || vtext === '알 수 없음') ? null : vtext });
+    } catch (err) {
+      console.error('[ai/chat identify]', err.message);
+      return res.status(500).json({ error: '서버 오류가 발생했습니다.' });
+    }
+  }
+
+  if (!message?.trim()) return res.status(400).json({ error: 'message required' });
 
   try {
     const week1   = getMonday(0);
