@@ -136,8 +136,8 @@ function StepsSection({ steps, loading, error, onRetry, accent }) {
 
 /* ── 메인 컴포넌트 ──────────────────────────────────────── */
 export default function RecipeSheet() {
-  const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion, setFavoritesOpen, setFavoriteSeed } = useApp();
-  const { family } = useFamily();
+  const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion, showToast } = useApp();
+  const { family, saveProfile } = useFamily();
 
   const [info, setInfo]           = useState(null);
   const [baseLoading, setBaseLoading] = useState(false);
@@ -196,11 +196,16 @@ export default function RecipeSheet() {
     setReplaceSlot(slot);
   };
 
-  const handleFavorite = () => {
-    if (recipe?.name) setFavoriteSeed(recipe.name);
-    setRecipe(null);
-    setFavoritesOpen(true);
-  };
+  const handleFavorite = useCallback(async () => {
+    if (!recipe?.name) return;
+    const likes = family.food_likes ?? [];
+    if (likes.includes(recipe.name)) {
+      showToast('이미 즐겨찾기에 있는 메뉴예요', 'info');
+      return;
+    }
+    await saveProfile({ food_likes: [...likes, recipe.name] });
+    showToast(`"${recipe.name}"이 즐겨찾기에 추가됐어요`, 'success');
+  }, [recipe, family, saveProfile, showToast]);
 
   const handleDelete = async () => {
     if (!recipe?.plan_date) return;
@@ -342,7 +347,7 @@ export default function RecipeSheet() {
                 onClick={handleFavorite}
                 style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
               >
-                {Icon.heart(14)} 좋아하는 메뉴
+                {Icon.heart(14)} 좋아하는 메뉴 추가
               </button>
               <button
                 onClick={() => setRecipe(null)}

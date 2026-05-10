@@ -151,7 +151,7 @@ export default function CalendarScreen() {
   const [fetchError, setFetchError] = useState(false);
   const [picker, setPicker] = useState(null);
 
-  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion, showToast } = useApp();
+  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion, showToast, setFavoritesOpen } = useApp();
   const { family } = useFamily();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -490,6 +490,28 @@ export default function CalendarScreen() {
             </div>
           </div>
           {Icon.chat(20)}
+        </button>
+
+        <button onClick={() => setFavoritesOpen(true)} style={{
+          background: 'var(--surface)', border: '1px solid var(--line)',
+          borderRadius: 16, padding: '14px 18px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          boxShadow: 'var(--shadow-sm)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 30, height: 30, borderRadius: 10,
+              background: `${accent}18`, color: accent,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {Icon.heart(16)}
+            </div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap' }}>좋아하는 새 메뉴를 추가</div>
+              <div style={{ fontSize: 10.5, color: 'var(--ink-3)', marginTop: 1, whiteSpace: 'nowrap' }}>텍스트 · 음성 · 사진으로 추가</div>
+            </div>
+          </div>
+          {Icon.heart(18)}
         </button>
       </div>
 
