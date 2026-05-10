@@ -309,12 +309,12 @@ export default function ChatSheet() {
       </div>
 
       {/* 입력창 */}
-      <div style={{ borderTop: '1px solid var(--line)', padding: '10px 14px 14px', display: 'flex', gap: 8, alignItems: 'center', background: 'var(--surface)' }}>
+      <div style={{ borderTop: '1px solid var(--line)', padding: '10px 10px 14px', display: 'flex', gap: 6, alignItems: 'center', background: 'var(--surface)' }}>
         <div style={{
-          flex: 1, display: 'flex', alignItems: 'center',
+          flex: 1, minWidth: 0, display: 'flex', alignItems: 'center',
           background: 'var(--bg)',
           border: `1px solid ${listening ? accent : 'var(--line)'}`,
-          borderRadius: 999, padding: '10px 16px',
+          borderRadius: 999, padding: '10px 14px',
           transition: 'border-color 200ms',
         }}>
           <input
