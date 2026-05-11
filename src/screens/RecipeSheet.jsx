@@ -360,7 +360,7 @@ export default function RecipeSheet() {
         )}
 
         {!baseLoading && !info && name && (
-          <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
+          <div style={{ padding: '32px 0 8px', textAlign: 'center', color: 'var(--ink-3)', fontSize: 13 }}>
             <div>{baseError ? '레시피를 불러오지 못했어요' : '레시피 정보를 찾을 수 없어요'}</div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
               {baseError && (
@@ -373,6 +373,21 @@ export default function RecipeSheet() {
                   다른 메뉴로 교체
                 </button>
               )}
+            </div>
+            {/* 에러 상태에서도 즐겨찾기·닫기 버튼 노출 */}
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button
+                onClick={handleFavorite}
+                style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+              >
+                {Icon.heart(14)} 좋아하는 메뉴 추가
+              </button>
+              <button
+                onClick={() => setRecipe(null)}
+                style={{ flex: 1, padding: '13px 0', borderRadius: 12, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}
+              >
+                확인
+              </button>
             </div>
           </div>
         )}
