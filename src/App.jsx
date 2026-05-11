@@ -13,6 +13,7 @@ import ProfileScreen     from './screens/ProfileScreen';
 import ChatSheet         from './screens/ChatSheet';
 import RecipeSheet       from './screens/RecipeSheet';
 import FavoritesSheet    from './screens/FavoritesSheet';
+import InstallBanner     from './components/InstallBanner';
 import RecipeScreen      from './screens/RecipeScreen';
 import PrivacyScreen     from './screens/PrivacyScreen';
 import DataDeletionScreen from './screens/DataDeletionScreen';
@@ -167,6 +168,7 @@ function AppShell() {
       <ChatSheet />
       <RecipeSheet />
       <FavoritesSheet />
+      <InstallBanner />
       <GlobalToast />
 
       <Routes>
