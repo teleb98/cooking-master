@@ -4,11 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import './tokens.css';
 import App from './App.jsx';
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  });
-}
+// SW registration disabled — kill-switch deployed to clear stale caches
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

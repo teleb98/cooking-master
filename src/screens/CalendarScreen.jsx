@@ -151,7 +151,7 @@ export default function CalendarScreen() {
   const [fetchError, setFetchError] = useState(false);
   const [picker, setPicker] = useState(null);
 
-  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion, showToast, setFavoritesOpen } = useApp();
+  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, showToast, setFavoritesOpen } = useApp();
   const { family } = useFamily();
   const { user } = useAuth();
   const navigate = useNavigate();
