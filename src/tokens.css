@@ -39,6 +39,31 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* ── 다크 모드 ─────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg:         #1C1916;
+  --bg-2:       #252019;
+  --surface:    #2C2720;
+  --line:       #3E3830;
+  --line-soft:  #352F28;
+  --ink:        #F0EBE2;
+  --ink-2:      #C4BDB4;
+  --ink-3:      #8A837A;
+  --ink-4:      #5A5450;
+
+  --accent-soft: #4A2518;
+  --accent-ink:  #F1C4B0;
+
+  --baby-soft:  #1E2E18;
+  --baby-ink:   #A8C890;
+
+  --warn-soft:  #2E2410;
+
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.2);
+  --shadow:     0 4px 14px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.2);
+  --shadow-lg:  0 18px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body, #root {

@@ -120,12 +120,16 @@ function GlobalToast() {
 const HIDE_NAV = ['/welcome', '/login', '/onboarding', '/join', '/'];
 
 function AppShell() {
-  const { accent, onboarded } = useApp();
+  const { accent, onboarded, theme } = useApp();
   const { isAuthenticated, authLoading } = useAuth();
 
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', accent);
   }, [accent]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : '');
+  }, [theme]);
 
   if (authLoading) return <GlobalLoader />;
 

@@ -381,7 +381,7 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
 
 /* ── 메인 컴포넌트 ────────────────────────────────────────── */
 export default function ProfileScreen() {
-  const { accent, setAccent, showToast } = useApp();
+  const { accent, setAccent, theme, setTheme, showToast } = useApp();
   const { user, logout } = useAuth();
   const { family, profile, members, saveProfile } = useFamily();
   const navigate = useNavigate();
@@ -729,6 +729,29 @@ export default function ProfileScreen() {
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--ink-3)' }}>
           <span>월요일 기준 {family.shopping_day_kr}요일 장보기</span>
+        </div>
+      </div>
+
+      {/* 다크 모드 */}
+      <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
+        <div className="kr-en" style={{ marginBottom: 12 }}>THEME · 테마</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {[
+            { key: 'light', label: '라이트', icon: '☀️' },
+            { key: 'dark',  label: '다크',   icon: '🌙' },
+          ].map(opt => (
+            <button key={opt.key} onClick={() => setTheme(opt.key)} style={{
+              padding: '12px 0', borderRadius: 12, fontWeight: 700, fontSize: 14,
+              background: theme === opt.key ? accent : 'var(--bg)',
+              color: theme === opt.key ? '#fff' : 'var(--ink-2)',
+              border: theme === opt.key ? 'none' : '1px solid var(--line)',
+              transition: 'background 150ms, color 150ms',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}>
+              <span style={{ fontSize: 16 }}>{opt.icon}</span>
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 

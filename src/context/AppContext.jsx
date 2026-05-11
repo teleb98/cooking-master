@@ -4,9 +4,11 @@ const AppContext = createContext(null);
 
 const ACCENT_KEY   = 'cookingMaster_accent';
 const ONBOARD_KEY  = 'cookingMaster_onboarded';
+const THEME_KEY    = 'cookingMaster_theme';
 
 export function AppProvider({ children }) {
   const [accent, setAccentState] = useState(() => localStorage.getItem(ACCENT_KEY) ?? '#C8654A');
+  const [theme,  setThemeState]  = useState(() => localStorage.getItem(THEME_KEY)  ?? 'light');
   const [chatOpen, setChatOpen] = useState(false);
   // recipe: { name, plan_date, meal_type } | null
   const [recipe, setRecipe] = useState(null);
@@ -25,6 +27,12 @@ export function AppProvider({ children }) {
   const setAccent = useCallback((v) => {
     setAccentState(v);
     localStorage.setItem(ACCENT_KEY, v);
+  }, []);
+
+  const setTheme = useCallback((v) => {
+    setThemeState(v);
+    localStorage.setItem(THEME_KEY, v);
+    document.documentElement.setAttribute('data-theme', v === 'dark' ? 'dark' : '');
   }, []);
 
   const bumpMealVersion = useCallback(() => setMealVersion(v => v + 1), []);
@@ -46,7 +54,7 @@ export function AppProvider({ children }) {
   }, []);
 
   return (
-    <AppContext.Provider value={{ accent, setAccent, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, toast, showToast, onboarded, markOnboarded, clearOnboarded, favoritesOpen, setFavoritesOpen, favoriteSeed, setFavoriteSeed }}>
+    <AppContext.Provider value={{ accent, setAccent, theme, setTheme, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, toast, showToast, onboarded, markOnboarded, clearOnboarded, favoritesOpen, setFavoritesOpen, favoriteSeed, setFavoriteSeed }}>
       {children}
     </AppContext.Provider>
   );

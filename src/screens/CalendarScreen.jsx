@@ -182,6 +182,13 @@ export default function CalendarScreen() {
       .finally(() => setLoading(false));
   }, [weekStart, mealVersion]);
 
+  // 파트너 연결 시 30초마다 식단 자동 새로고침
+  useEffect(() => {
+    if (!family.partner_connected) return;
+    const id = setInterval(() => bumpMealVersion(), 30_000);
+    return () => clearInterval(id);
+  }, [family.partner_connected, bumpMealVersion]);
+
   // RecipeSheet "교체" 버튼 → replaceSlot 감지해서 picker 열기
   useEffect(() => {
     if (replaceSlot) {
