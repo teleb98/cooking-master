@@ -40,10 +40,32 @@ function toDateStr(d) {
 
 function daysUntil(targetDow) {
   const today = new Date();
-  const todayDow = today.getUTCDay() === 0 ? 6 : today.getUTCDay() - 1; // 0=Mon, UTC
+  const todayDow = today.getUTCDay() === 0 ? 6 : today.getUTCDay() - 1;
   let diff = (targetDow - todayDow + 7) % 7;
   return diff === 0 ? 7 : diff;
 }
+
+function getMonthGrid(monthOffset) {
+  const today = new Date();
+  const firstOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + monthOffset, 1));
+  const lastOfMonth  = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + monthOffset + 1, 0));
+  const dow = firstOfMonth.getUTCDay();
+  const startOffset = dow === 0 ? -6 : 1 - dow;
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setUTCDate(firstOfMonth.getUTCDate() + startOffset);
+  const totalCells = Math.ceil((lastOfMonth.getUTCDate() - startOffset) / 7) * 7;
+  return {
+    year:  firstOfMonth.getUTCFullYear(),
+    month: firstOfMonth.getUTCMonth(),
+    dates: Array.from({ length: totalCells }, (_, i) => {
+      const d = new Date(gridStart);
+      d.setUTCDate(gridStart.getUTCDate() + i);
+      return d;
+    }),
+  };
+}
+
+const KR_MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
 /* ── 메뉴 선택 시트 ─────────────────────────────────────── */
 function MealPicker({ open, onClose, onSelect, onPreview, recipes }) {
@@ -144,12 +166,15 @@ function MealPicker({ open, onClose, onSelect, onPreview, recipes }) {
 
 /* ── 메인 컴포넌트 ───────────────────────────────────────── */
 export default function CalendarScreen() {
-  const [week, setWeek] = useState(0);
-  const [meals, setMeals] = useState({});
-  const [recipes, setRecipes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [week, setWeek]           = useState(0);
+  const [meals, setMeals]         = useState({});
+  const [recipes, setRecipes]     = useState([]);
+  const [loading, setLoading]     = useState(true);
   const [fetchError, setFetchError] = useState(false);
-  const [picker, setPicker] = useState(null);
+  const [picker, setPicker]       = useState(null);
+  const [viewMode, setViewMode]   = useState('week');
+  const [monthOffset, setMonthOffset] = useState(0);
+  const monthGrid = useMemo(() => getMonthGrid(monthOffset), [monthOffset]);
 
   const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, showToast, setFavoritesOpen } = useApp();
   const { family } = useFamily();
@@ -168,19 +193,36 @@ export default function CalendarScreen() {
 
   // 주간 식단 조회
   useEffect(() => {
+    if (viewMode !== 'week') return;
     setLoading(true);
     setFetchError(false);
     apiFetch(`/meals?week_start=${weekStart}`)
       .then(d => {
         const map = {};
-        for (const m of (d.meals ?? [])) {
-          map[`${m.plan_date}_${m.meal_type}`] = m;
-        }
+        for (const m of (d.meals ?? [])) map[`${m.plan_date}_${m.meal_type}`] = m;
         setMeals(map);
       })
       .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
-  }, [weekStart, mealVersion]);
+  }, [weekStart, mealVersion, viewMode]);
+
+  // 월별 식단 조회
+  useEffect(() => {
+    if (viewMode !== 'month') return;
+    setLoading(true);
+    setFetchError(false);
+    const grid = getMonthGrid(monthOffset);
+    const start = toDateStr(grid.dates[0]);
+    const end   = toDateStr(grid.dates[grid.dates.length - 1]);
+    apiFetch(`/meals?start=${start}&end=${end}`)
+      .then(d => {
+        const map = {};
+        for (const m of (d.meals ?? [])) map[`${m.plan_date}_${m.meal_type}`] = m;
+        setMeals(map);
+      })
+      .catch(() => setFetchError(true))
+      .finally(() => setLoading(false));
+  }, [viewMode, monthOffset, mealVersion]);
 
   // 파트너 연결 시 30초마다 식단 자동 새로고침
   useEffect(() => {
@@ -230,6 +272,21 @@ export default function CalendarScreen() {
     setPicker(null);
     setRecipe({ name: recipe.name });
   };
+
+  const handleMonthDayClick = useCallback((date) => {
+    const todayDate = new Date();
+    const todayDow  = todayDate.getUTCDay();
+    const todayMon  = new Date(todayDate);
+    todayMon.setUTCDate(todayDate.getUTCDate() - (todayDow === 0 ? 6 : todayDow - 1));
+    todayMon.setUTCHours(0, 0, 0, 0);
+    const dateDow  = date.getUTCDay();
+    const dateMon  = new Date(date);
+    dateMon.setUTCDate(date.getUTCDate() - (dateDow === 0 ? 6 : dateDow - 1));
+    dateMon.setUTCHours(0, 0, 0, 0);
+    const diffDays = Math.round((dateMon - todayMon) / 86_400_000);
+    setWeek(Math.round(diffDays / 7));
+    setViewMode('week');
+  }, []);
 
   const dUntil = daysUntil(family.shopping_day);
   const totalMeals = Object.values(meals).filter(m => m.menu_name).length;
@@ -311,41 +368,51 @@ export default function CalendarScreen() {
         </div>
       </div>
 
-      {/* 주 네비게이션 */}
+      {/* 주/월 네비게이션 */}
       {(() => {
-        const weekLabel = week === 0 ? '이번 주' : week === 1 ? '다음 주' : week === -1 ? '지난 주' : week < 0 ? `${Math.abs(week)}주 전` : `${week}주 후`;
-        const rangeLabel = `${weekDates[0].getUTCMonth() + 1}/${weekDates[0].getUTCDate()}–${weekDates[6].getUTCDate()}`;
-        return (
-          <div style={{ padding: '0 18px', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <button
-              onClick={() => setWeek(w => w - 1)}
-              style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-            >
-              {Icon.chevronLeft(16)}
-            </button>
-            <div style={{
-              flex: 1, height: 36, borderRadius: 10, background: week === 0 ? 'var(--ink)' : 'var(--surface)',
-              border: week === 0 ? 'none' : '1px solid var(--line)',
-              color: week === 0 ? '#fff' : 'var(--ink-2)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '0 14px', gap: 8,
-            }}>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>{weekLabel}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.65 }}>{rangeLabel}</span>
+        const navBtnStyle = { width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
+        const toggleBtnStyle = { padding: '0 12px', height: 36, borderRadius: 10, fontSize: 12, fontWeight: 700, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-3)', flexShrink: 0 };
+
+        if (viewMode === 'week') {
+          const weekLabel  = week === 0 ? '이번 주' : week === 1 ? '다음 주' : week === -1 ? '지난 주' : week < 0 ? `${Math.abs(week)}주 전` : `${week}주 후`;
+          const rangeLabel = `${weekDates[0].getUTCMonth() + 1}/${weekDates[0].getUTCDate()}–${weekDates[6].getUTCDate()}`;
+          return (
+            <div style={{ padding: '0 18px', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <button onClick={() => setWeek(w => w - 1)} style={navBtnStyle}>{Icon.chevronLeft(16)}</button>
+              <div style={{ flex: 1, height: 36, borderRadius: 10, background: week === 0 ? 'var(--ink)' : 'var(--surface)', border: week === 0 ? 'none' : '1px solid var(--line)', color: week === 0 ? '#fff' : 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px' }}>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{weekLabel}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, opacity: 0.65 }}>{rangeLabel}</span>
+              </div>
+              <button onClick={() => setWeek(w => w + 1)} style={navBtnStyle}>{Icon.chevronRight(16)}</button>
+              <button
+                onClick={() => {
+                  const todayD = new Date();
+                  const mo = (weekDates[0].getUTCFullYear() - todayD.getUTCFullYear()) * 12 + (weekDates[0].getUTCMonth() - todayD.getUTCMonth());
+                  setMonthOffset(mo);
+                  setViewMode('month');
+                }}
+                style={toggleBtnStyle}
+              >월별</button>
             </div>
-            <button
-              onClick={() => setWeek(w => w + 1)}
-              style={{ width: 36, height: 36, borderRadius: 10, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-            >
-              {Icon.chevronRight(16)}
-            </button>
-          </div>
-        );
+          );
+        } else {
+          const monthLabel = `${monthGrid.year}년 ${KR_MONTHS[monthGrid.month]}`;
+          return (
+            <div style={{ padding: '0 18px', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <button onClick={() => setMonthOffset(m => m - 1)} style={navBtnStyle}>{Icon.chevronLeft(16)}</button>
+              <div style={{ flex: 1, height: 36, borderRadius: 10, background: monthOffset === 0 ? 'var(--ink)' : 'var(--surface)', border: monthOffset === 0 ? 'none' : '1px solid var(--line)', color: monthOffset === 0 ? '#fff' : 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 14px' }}>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{monthLabel}</span>
+              </div>
+              <button onClick={() => setMonthOffset(m => m + 1)} style={navBtnStyle}>{Icon.chevronRight(16)}</button>
+              <button onClick={() => setViewMode('week')} style={toggleBtnStyle}>주간</button>
+            </div>
+          );
+        }
       })()}
 
       {/* 식단 그리드 */}
       <div style={{ padding: '0 12px', flex: 1 }}>
-        {fetchError && !loading && (
+        {fetchError && !loading && viewMode === 'week' && (
           <div style={{
             marginBottom: 10, padding: '14px 16px', borderRadius: 14,
             background: 'var(--warn-soft)', border: '1px solid var(--warn)',
@@ -362,100 +429,154 @@ export default function CalendarScreen() {
             >다시 시도</button>
           </div>
         )}
-        <div style={{
-          background: 'var(--surface)', borderRadius: 18, border: '1px solid var(--line)',
-          padding: '10px 6px 12px', boxShadow: 'var(--shadow-sm)',
-          opacity: loading ? 0.6 : 1, transition: 'opacity 200ms',
-        }}>
-          {/* 날짜 헤더 */}
-          <div style={{ display: 'grid', gridTemplateColumns: '34px repeat(7, 1fr)', gap: 4, padding: '0 4px 8px' }}>
-            <div />
-            {weekDates.map((d, i) => {
-              const isToday = d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
-              return (
-                <div key={i} style={{
-                  textAlign: 'center', padding: '6px 0', borderRadius: 8,
-                  background: isToday ? 'var(--accent)' : 'transparent',
-                  color: isToday ? '#fff' : 'var(--ink-2)',
-                }}>
-                  <div style={{ fontSize: 10, fontWeight: 600, opacity: isToday ? 0.85 : 0.6 }}>{DAYS_KR[i]}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{d.getUTCDate()}</div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 끼니 행 */}
-          {MEAL_TYPES.map((mt, mi) => (
-            <div key={mt.key} style={{
-              display: 'grid', gridTemplateColumns: '34px repeat(7, 1fr)', gap: 4, padding: '4px',
-              borderTop: mi === 0 ? '1px solid var(--line-soft)' : 'none',
+        {viewMode === 'week' ? (
+          <>
+            <div style={{
+              background: 'var(--surface)', borderRadius: 18, border: '1px solid var(--line)',
+              padding: '10px 6px 12px', boxShadow: 'var(--shadow-sm)',
+              opacity: loading ? 0.6 : 1, transition: 'opacity 200ms',
             }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', gap: 4 }}>
-                {mt.key === 'breakfast' ? Icon.sun(12) : mt.key === 'lunch' ? Icon.noon(12) : Icon.moon(12)}
-                <span style={{ fontSize: 9, fontWeight: 600 }}>{mt.kr}</span>
+              {/* 날짜 헤더 */}
+              <div style={{ display: 'grid', gridTemplateColumns: '34px repeat(7, 1fr)', gap: 4, padding: '0 4px 8px' }}>
+                <div />
+                {weekDates.map((d, i) => {
+                  const isToday = d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
+                  return (
+                    <div key={i} style={{ textAlign: 'center', padding: '6px 0', borderRadius: 8, background: isToday ? 'var(--accent)' : 'transparent', color: isToday ? '#fff' : 'var(--ink-2)' }}>
+                      <div style={{ fontSize: 10, fontWeight: 600, opacity: isToday ? 0.85 : 0.6 }}>{DAYS_KR[i]}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{d.getUTCDate()}</div>
+                    </div>
+                  );
+                })}
               </div>
 
-              {weekDates.map((d, di) => {
-                const key = `${toDateStr(d)}_${mt.key}`;
-                const meal = meals[key];
-                const isToday = d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
-                const highlight = isToday && mt.key === 'dinner';
+              {/* 끼니 행 */}
+              {MEAL_TYPES.map((mt, mi) => (
+                <div key={mt.key} style={{ display: 'grid', gridTemplateColumns: '34px repeat(7, 1fr)', gap: 4, padding: '4px', borderTop: mi === 0 ? '1px solid var(--line-soft)' : 'none' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-3)', gap: 4 }}>
+                    {mt.key === 'breakfast' ? Icon.sun(12) : mt.key === 'lunch' ? Icon.noon(12) : Icon.moon(12)}
+                    <span style={{ fontSize: 9, fontWeight: 600 }}>{mt.kr}</span>
+                  </div>
+                  {weekDates.map((d, di) => {
+                    const key = `${toDateStr(d)}_${mt.key}`;
+                    const meal = meals[key];
+                    const isToday = d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
+                    const highlight = isToday && mt.key === 'dinner';
+                    return (
+                      <button key={di} onClick={() => handleCellClick(d, mt.key, meal)} style={{
+                        minHeight: 64, borderRadius: 10, padding: '6px 4px',
+                        background: !meal?.menu_name ? 'transparent' : highlight ? 'var(--ink)' : 'var(--bg-2)',
+                        color: !meal?.menu_name ? 'var(--ink-4)' : highlight ? '#fff' : 'var(--ink)',
+                        border: !meal?.menu_name ? '1px dashed var(--line)' : '1px solid transparent',
+                        fontSize: 10, lineHeight: 1.2, fontWeight: 500,
+                        textAlign: 'left', display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                      }}>
+                        {!meal?.menu_name ? (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>{Icon.plus(14)}</div>
+                        ) : (
+                          <>
+                            <div style={{ fontWeight: 600, fontSize: 10.5, wordBreak: 'keep-all' }}>{meal.menu_name}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                              <span style={{ fontSize: 9, opacity: 0.7, fontFamily: 'var(--font-mono)' }}>{meal.kcal}</span>
+                              <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
+                                {meal.is_baby && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--baby)' }} />}
+                                {family.partner_connected && myUserId && meal.user_id && meal.user_id !== myUserId && (
+                                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--ink-3)' }} title={`${family.partner_name}님이 설정`} />
+                                )}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            {/* 범례 */}
+            <div style={{ padding: '14px 6px', display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 10, color: 'var(--ink-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--baby)' }} />이유식 분기
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 14, height: 8, borderRadius: 3, background: 'var(--ink)' }} />오늘
+              </div>
+              {family.partner_connected && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--ink-3)' }} />{family.partner_name}님 식단
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          /* ── 월별 뷰 ── */
+          <div style={{ opacity: loading ? 0.6 : 1, transition: 'opacity 200ms' }}>
+            {/* 요일 헤더 */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+              {DAYS_KR.map(d => (
+                <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'var(--ink-3)', padding: '4px 0' }}>{d}</div>
+              ))}
+            </div>
+            {/* 날짜 셀 */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2,
+              background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)',
+              padding: 6, boxShadow: 'var(--shadow-sm)',
+            }}>
+              {monthGrid.dates.map(d => {
+                const ds = toDateStr(d);
+                const todayStr = toDateStr(today);
+                const isToday   = ds === todayStr;
+                const isCurrent = d.getUTCMonth() === monthGrid.month;
+                const dayMeals  = MEAL_TYPES.map(mt => meals[`${ds}_${mt.key}`]);
+                const filledCount = dayMeals.filter(m => m?.menu_name).length;
                 return (
                   <button
-                    key={di}
-                    onClick={() => handleCellClick(d, mt.key, meal)}
+                    key={ds}
+                    onClick={() => handleMonthDayClick(d)}
                     style={{
-                      minHeight: 64, borderRadius: 10, padding: '6px 4px',
-                      background: !meal?.menu_name ? 'transparent'
-                        : highlight ? 'var(--ink)' : 'var(--bg-2)',
-                      color: !meal?.menu_name ? 'var(--ink-4)'
-                        : highlight ? '#fff' : 'var(--ink)',
-                      border: !meal?.menu_name ? '1px dashed var(--line)' : '1px solid transparent',
-                      fontSize: 10, lineHeight: 1.2, fontWeight: 500,
-                      textAlign: 'left',
-                      display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      padding: '7px 2px 6px', borderRadius: 8,
+                      background: isToday ? 'var(--accent)' : 'transparent',
+                      opacity: isCurrent ? 1 : 0.3,
                     }}
                   >
-                    {!meal?.menu_name ? (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-                        {Icon.plus(14)}
-                      </div>
-                    ) : (
-                      <>
-                        <div style={{ fontWeight: 600, fontSize: 10.5, wordBreak: 'keep-all' }}>{meal.menu_name}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-                          <span style={{ fontSize: 9, opacity: 0.7, fontFamily: 'var(--font-mono)' }}>{meal.kcal}</span>
-                          <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}>
-                            {meal.is_baby && <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--baby)' }} />}
-                            {family.partner_connected && myUserId && meal.user_id && meal.user_id !== myUserId && (
-                              <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--ink-3)' }} title={`${family.partner_name}님이 설정`} />
-                            )}
-                          </div>
-                        </div>
-                      </>
+                    <div style={{
+                      fontSize: 13, fontWeight: isToday ? 700 : 500,
+                      color: isToday ? '#fff' : 'var(--ink)', lineHeight: 1.2,
+                    }}>
+                      {d.getUTCDate()}
+                    </div>
+                    <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+                      {MEAL_TYPES.map((mt, i) => (
+                        <div key={mt.key} style={{
+                          width: 4, height: 4, borderRadius: '50%',
+                          background: dayMeals[i]?.menu_name
+                            ? (isToday ? 'rgba(255,255,255,0.85)' : accent)
+                            : (isToday ? 'rgba(255,255,255,0.3)' : 'var(--line)'),
+                        }} />
+                      ))}
+                    </div>
+                    {filledCount === 3 && !isToday && (
+                      <div style={{ width: 14, height: 2, borderRadius: 1, background: `${accent}55`, marginTop: 2 }} />
                     )}
                   </button>
                 );
               })}
             </div>
-          ))}
-        </div>
-
-        {/* 범례 */}
-        <div style={{ padding: '14px 6px', display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 10, color: 'var(--ink-3)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--baby)' }} />이유식 분기
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 14, height: 8, borderRadius: 3, background: 'var(--ink)' }} />오늘
-          </div>
-          {family.partner_connected && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--ink-3)' }} />{family.partner_name}님 식단
+            {/* 월별 범례 */}
+            <div style={{ padding: '12px 6px 4px', display: 'flex', gap: 14, fontSize: 10, color: 'var(--ink-3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 4, height: 4, borderRadius: '50%', background: accent }} />식단 있음
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--line)' }} />미입력
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--ink-4)', marginLeft: 'auto' }}>탭하면 주간 뷰로 이동</div>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* 장바구니 배너 + AI FAB */}

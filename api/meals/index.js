@@ -83,11 +83,18 @@ export default async function handler(req, res) {
   const userId = payload.userId;
 
   try {
-    // ── GET /api/meals?week_start=YYYY-MM-DD ─────────────────
+    // ── GET /api/meals?week_start=YYYY-MM-DD  또는  ?start=…&end=… ──
     if (req.method === 'GET') {
-      const { week_start } = req.query;
-      if (!week_start) return res.status(400).json({ error: 'week_start required' });
-      const weekEnd = toDateStr(addDays(new Date(week_start), 6));
+      const { week_start, start, end } = req.query;
+      let rangeStart, rangeEnd;
+      if (start && end) {
+        rangeStart = start; rangeEnd = end;
+      } else if (week_start) {
+        rangeStart = week_start; rangeEnd = toDateStr(addDays(new Date(week_start), 6));
+      } else {
+        return res.status(400).json({ error: 'week_start or start+end required' });
+      }
+      const weekEnd = rangeEnd;
 
       const { groupId, isConnected } = await getUserGroupStatus(userId);
 
@@ -115,11 +122,11 @@ export default async function handler(req, res) {
         const [{ data: groupRows }, { data: myUntagged }] = await Promise.all([
           db.supabase.from('meal_plans').select('*')
             .eq('family_group_id', groupId)
-            .gte('plan_date', week_start).lte('plan_date', weekEnd)
+            .gte('plan_date', rangeStart).lte('plan_date', weekEnd)
             .order('plan_date').order('meal_type'),
           db.supabase.from('meal_plans').select('*')
             .eq('user_id', userId).is('family_group_id', null)
-            .gte('plan_date', week_start).lte('plan_date', weekEnd),
+            .gte('plan_date', rangeStart).lte('plan_date', weekEnd),
         ]);
         // 병합 (그룹 식단 우선)
         const map = {};
@@ -129,7 +136,7 @@ export default async function handler(req, res) {
       } else {
         const { data, error } = await db.supabase.from('meal_plans').select('*')
           .eq('user_id', userId)
-          .gte('plan_date', week_start).lte('plan_date', weekEnd)
+          .gte('plan_date', rangeStart).lte('plan_date', weekEnd)
           .order('plan_date').order('meal_type');
         if (error) throw error;
         meals = data ?? [];
