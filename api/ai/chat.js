@@ -76,16 +76,21 @@ export default async function handler(req, res) {
     const week1   = getMonday(0);
     const weekEnd = addDays(getMonday(1), 6);
 
-    const [mealsRes, profileRes, recipesRes] = await Promise.all([
+    const [mealsRes, profileRes] = await Promise.all([
       db.supabase.from('meal_plans').select('*').eq('user_id', userId)
         .gte('plan_date', week1).lte('plan_date', weekEnd).order('plan_date').order('meal_type'),
       db.supabase.from('user_profiles').select('*').eq('user_id', userId).maybeSingle(),
-      db.supabase.from('recipes').select('name, kcal, baby, tags').order('name'),
     ]);
 
-    const meals      = mealsRes.data ?? [];
-    const profile    = profileRes.data ?? {};
-    const allRecipes = recipesRes.data ?? [];
+    // 공유 레시피 + 사용자 커스텀 레시피 (user_id 컬럼 없는 경우 전체 폴백)
+    const recipesFiltered = await db.supabase.from('recipes').select('name, kcal, baby, tags')
+      .or(`user_id.is.null,user_id.eq.${userId}`).order('name');
+    const allRecipes = (recipesFiltered.error
+      ? (await db.supabase.from('recipes').select('name, kcal, baby, tags').order('name')).data
+      : recipesFiltered.data) ?? [];
+
+    const meals   = mealsRes.data ?? [];
+    const profile = profileRes.data ?? {};
 
     const mealByDate = {};
     for (const m of meals) {

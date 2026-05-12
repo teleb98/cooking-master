@@ -33,13 +33,18 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(503).json({ error: 'AI 서비스가 설정되지 않았습니다.' });
 
   try {
-    const [profileRes, recipesRes] = await Promise.all([
+    const [profileRes] = await Promise.all([
       db.supabase.from('user_profiles').select('*').eq('user_id', userId).maybeSingle(),
-      db.supabase.from('recipes').select('name, kcal, baby, tags').order('name'),
     ]);
 
-    const profile    = profileRes.data ?? {};
-    const allRecipes = recipesRes.data ?? [];
+    // 공유 레시피 + 사용자 커스텀 레시피 (user_id 컬럼 없는 경우 전체 폴백)
+    const recipesFiltered = await db.supabase.from('recipes').select('name, kcal, baby, tags')
+      .or(`user_id.is.null,user_id.eq.${userId}`).order('name');
+    const allRecipes = (recipesFiltered.error
+      ? (await db.supabase.from('recipes').select('name, kcal, baby, tags').order('name')).data
+      : recipesFiltered.data) ?? [];
+
+    const profile = profileRes.data ?? {};
     if (allRecipes.length === 0) return res.status(500).json({ error: '레시피 데이터가 없습니다.' });
 
     const familyType = profile.family_type ?? 'couple';

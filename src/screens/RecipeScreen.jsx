@@ -1,17 +1,19 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
+import { useAuth } from '../context/AuthContext';
 import Icon from '../icons';
 
 const TOKEN_KEY = 'cookingMaster_token';
 
-async function apiFetch(path) {
+async function apiFetch(path, opts = {}) {
   const token = localStorage.getItem(TOKEN_KEY);
   const res = await fetch(`/api${path}`, {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
+    ...opts,
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
@@ -86,6 +88,9 @@ function RecipeCard({ recipe, accent, onOpen }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 4 }}>{recipe.name}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+          {recipe.user_id && (
+            <span style={{ fontSize: 9.5, padding: '2px 7px', borderRadius: 4, background: accent + '22', color: accent, fontWeight: 700, flexShrink: 0 }}>MY</span>
+          )}
           {recipe.baby && (
             <span style={{ fontSize: 9.5, padding: '2px 7px', borderRadius: 4, background: 'var(--baby-soft)', color: 'var(--baby-ink)', fontWeight: 600, flexShrink: 0 }}>이유식</span>
           )}
@@ -111,18 +116,48 @@ function RecipeCard({ recipe, accent, onOpen }) {
 export default function RecipeScreen() {
   const { accent, setRecipe } = useApp();
   const { family } = useFamily();
-  const [recipes, setRecipes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const { user } = useAuth();
+  const [recipes, setRecipes]     = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [search, setSearch]       = useState('');
   const [activeTag, setActiveTag] = useState(null);
-  const [babyOnly, setBabyOnly] = useState(false);
+  const [babyOnly, setBabyOnly]   = useState(false);
 
-  useEffect(() => {
+  const [showForm, setShowForm]   = useState(false);
+  const [formName, setFormName]   = useState('');
+  const [formKcal, setFormKcal]   = useState('');
+  const [formTags, setFormTags]   = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadRecipes = () => {
+    setLoading(true);
     apiFetch('/recipes')
       .then(d => setRecipes(d.recipes ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { loadRecipes(); }, []);
+
+  const handleCreateRecipe = async () => {
+    const name = formName.trim();
+    if (!name) return;
+    setSubmitting(true);
+    try {
+      const tags = formTags.split(',').map(t => t.trim()).filter(Boolean);
+      await apiFetch('/recipes', {
+        method: 'POST',
+        body: JSON.stringify({ name, kcal: formKcal || undefined, tags, create: true }),
+      });
+      setShowForm(false);
+      setFormName(''); setFormKcal(''); setFormTags('');
+      loadRecipes();
+    } catch (err) {
+      alert(err.message.includes('409') ? '같은 이름의 레시피가 이미 있습니다.' : '레시피 추가에 실패했어요.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const allTags = useMemo(() => {
     const tagSet = new Set();
@@ -145,16 +180,106 @@ export default function RecipeScreen() {
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100%',
-      background: 'var(--bg)',
+      background: 'var(--bg)', position: 'relative',
       paddingTop: 'env(safe-area-inset-top, 0px)',
       paddingBottom: 'calc(var(--nav-h) + env(safe-area-inset-bottom, 0px))',
     }}>
-      {/* 헤더 */}
-      <div style={{ padding: 'calc(env(safe-area-inset-top, 12px) + 12px) 18px 12px' }}>
-        <div className="kr-en">RECIPES · 레시피 탐색</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink)', marginTop: 2, letterSpacing: '-0.01em' }}>
-          {loading ? '레시피' : `${recipes.length}가지 레시피`}
+      {/* 커스텀 레시피 추가 폼 오버레이 */}
+      {showForm && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 10,
+          background: 'var(--bg)', display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ padding: 'calc(env(safe-area-inset-top, 12px) + 12px) 18px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={() => setShowForm(false)} style={{ color: 'var(--ink-3)', display: 'flex' }}>
+              {Icon.close(20)}
+            </button>
+            <div style={{ flex: 1 }}>
+              <div className="kr-en">CUSTOM · 나만의 레시피</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.01em' }}>레시피 추가</div>
+            </div>
+          </div>
+
+          <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '8px 18px 24px' }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', letterSpacing: '0.04em' }}>이름 *</label>
+            <input
+              value={formName}
+              onChange={e => setFormName(e.target.value)}
+              placeholder="예: 엄마표 김치볶음밥"
+              style={{
+                display: 'block', width: '100%', marginTop: 6, marginBottom: 18,
+                padding: '12px 14px', borderRadius: 12,
+                border: '1px solid var(--line)', background: 'var(--surface)',
+                fontSize: 14, color: 'var(--ink)', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', letterSpacing: '0.04em' }}>칼로리 kcal (선택)</label>
+            <input
+              type="number" inputMode="numeric"
+              value={formKcal}
+              onChange={e => setFormKcal(e.target.value)}
+              placeholder="예: 480"
+              style={{
+                display: 'block', width: '100%', marginTop: 6, marginBottom: 18,
+                padding: '12px 14px', borderRadius: 12,
+                border: '1px solid var(--line)', background: 'var(--surface)',
+                fontSize: 14, color: 'var(--ink)', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+
+            <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-2)', letterSpacing: '0.04em' }}>태그 (쉼표로 구분, 선택)</label>
+            <input
+              value={formTags}
+              onChange={e => setFormTags(e.target.value)}
+              placeholder="예: 한식, 볶음, 간편식"
+              style={{
+                display: 'block', width: '100%', marginTop: 6, marginBottom: 8,
+                padding: '12px 14px', borderRadius: 12,
+                border: '1px solid var(--line)', background: 'var(--surface)',
+                fontSize: 14, color: 'var(--ink)', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+            <p style={{ fontSize: 11.5, color: 'var(--ink-3)', margin: '0 0 24px 2px' }}>
+              레시피를 추가한 후 탭하면 AI가 조리법을 자동으로 생성해 드려요.
+            </p>
+          </div>
+
+          <div style={{ padding: '0 18px calc(env(safe-area-inset-bottom, 0px) + 16px)' }}>
+            <button
+              onClick={handleCreateRecipe}
+              disabled={!formName.trim() || submitting}
+              style={{
+                width: '100%', padding: '15px 0', borderRadius: 14,
+                background: accent, color: '#fff', fontSize: 15, fontWeight: 700,
+                opacity: !formName.trim() ? 0.45 : 1,
+              }}
+            >
+              {submitting ? '추가 중…' : '추가하기'}
+            </button>
+          </div>
         </div>
+      )}
+
+      {/* 헤더 */}
+      <div style={{ padding: 'calc(env(safe-area-inset-top, 12px) + 12px) 18px 12px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <div>
+          <div className="kr-en">RECIPES · 레시피 탐색</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink)', marginTop: 2, letterSpacing: '-0.01em' }}>
+            {loading ? '레시피' : `${recipes.length}가지 레시피`}
+          </div>
+        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '8px 14px', borderRadius: 20,
+            background: accent, color: '#fff',
+            fontSize: 12.5, fontWeight: 700,
+          }}
+        >
+          + 추가
+        </button>
       </div>
 
       {/* 검색바 */}
@@ -228,7 +353,7 @@ export default function RecipeScreen() {
                 key={r.name}
                 recipe={r}
                 accent={accent}
-                onOpen={() => setRecipe({ name: r.name })}
+                onOpen={() => setRecipe({ name: r.name, userId: r.user_id })}
               />
             ))}
           </div>

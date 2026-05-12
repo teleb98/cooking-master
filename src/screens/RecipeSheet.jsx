@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
 import { Sheet } from '../components/Sheet';
 import Icon from '../icons';
@@ -140,6 +141,7 @@ function toDateStr(d) { return d.toISOString().slice(0, 10); }
 /* ── 메인 컴포넌트 ──────────────────────────────────────── */
 export default function RecipeSheet() {
   const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion, showToast } = useApp();
+  const { user } = useAuth();
   const { family, saveProfile } = useFamily();
 
   const [info, setInfo]           = useState(null);
@@ -244,6 +246,18 @@ export default function RecipeSheet() {
     }
   };
 
+  const handleDeleteCustomRecipe = useCallback(async () => {
+    if (!info?.name) return;
+    if (!window.confirm(`"${info.name}" 레시피를 삭제할까요?`)) return;
+    try {
+      await apiFetch('/recipes', { method: 'DELETE', body: JSON.stringify({ name: info.name }) });
+      showToast(`"${info.name}"이 삭제됐어요`, 'success');
+      setRecipe(null);
+    } catch {
+      showToast('레시피 삭제에 실패했어요', 'error');
+    }
+  }, [info, showToast, setRecipe]);
+
   const handleDelete = async () => {
     if (!recipe?.plan_date) return;
     setDeleting(true);
@@ -260,8 +274,9 @@ export default function RecipeSheet() {
   };
 
   const MEAL_LABEL = { breakfast: '아침', lunch: '점심', dinner: '저녁' };
-  const mealLabel = recipe?.meal_type ? MEAL_LABEL[recipe.meal_type] : null;
-  const totalTime = info ? ((info.prep_time ?? 0) + (info.cook_time ?? 0)) : 0;
+  const mealLabel   = recipe?.meal_type ? MEAL_LABEL[recipe.meal_type] : null;
+  const totalTime   = info ? ((info.prep_time ?? 0) + (info.cook_time ?? 0)) : 0;
+  const isMyRecipe  = !!(info?.user_id && info.user_id === user?.id);
 
   const subtitle = baseLoading
     ? '불러오는 중...'
@@ -454,12 +469,22 @@ export default function RecipeSheet() {
                   )}
                 </div>
                 {!recipe?.plan_date && (
-                  <button
-                    onClick={() => setRecipe(null)}
-                    style={{ width: '100%', marginTop: 8, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}
-                  >
-                    닫기
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    {isMyRecipe && (
+                      <button
+                        onClick={handleDeleteCustomRecipe}
+                        style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: '#E53E3E', fontSize: 13, fontWeight: 600 }}
+                      >
+                        레시피 삭제
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setRecipe(null)}
+                      style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}
+                    >
+                      닫기
+                    </button>
+                  </div>
                 )}
               </>
             )}

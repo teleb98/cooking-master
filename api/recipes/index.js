@@ -5,12 +5,14 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const BASE_SELECT   = 'name, kcal, baby, baby_note, tags, ingredients';
-const DETAIL_SELECT = 'name, kcal, baby, baby_note, tags, ingredients, steps, prep_time, cook_time, serving, tips, nutrition';
+const DETAIL_SELECT = 'name, kcal, baby, baby_note, tags, ingredients, steps, prep_time, cook_time, serving, tips, nutrition, user_id';
 
-async function selectRecipe(supabase, name) {
-  // 신규 컬럼 포함 조회 시도, 컬럼 없으면 기본 컬럼으로 fallback
-  const full = await supabase.from('recipes').select(DETAIL_SELECT).eq('name', name).maybeSingle();
+async function selectRecipe(supabase, name, userId) {
+  const userFilter = `user_id.is.null,user_id.eq.${userId}`;
+  const full = await supabase.from('recipes').select(DETAIL_SELECT)
+    .eq('name', name).or(userFilter).maybeSingle();
   if (!full.error) return full;
+  // Fallback: columns may not exist yet (pre-migration)
   const base = await supabase.from('recipes').select(BASE_SELECT).eq('name', name).maybeSingle();
   return base;
 }
@@ -88,25 +90,60 @@ export default async function handler(req, res) {
   const payload = verifyToken(req);
   if (!payload) return res.status(401).json({ error: 'Unauthorized' });
 
-  /* ── POST: AI로 조리법 생성 후 DB 저장, 전체 레시피 반환 ── */
-  if (req.method === 'POST') {
+  const userId = payload.userId;
+
+  /* ── DELETE: 사용자 본인의 커스텀 레시피 삭제 ── */
+  if (req.method === 'DELETE') {
     const { name } = req.body ?? {};
     if (!name) return res.status(400).json({ error: 'name required' });
-
     try {
-      const { data: recipe, error } = await selectRecipe(db.supabase, name);
+      const { error } = await db.supabase.from('recipes')
+        .delete().eq('name', name).eq('user_id', userId);
+      if (error) throw error;
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('[recipes DELETE]', err.message);
+      return res.status(500).json({ error: 'Server error' });
+    }
+  }
+
+  /* ── POST: 커스텀 레시피 생성 or AI 조리법 생성 ── */
+  if (req.method === 'POST') {
+    const { name, create, kcal, tags, ingredients } = req.body ?? {};
+    if (!name) return res.status(400).json({ error: 'name required' });
+
+    /* 커스텀 레시피 생성 */
+    if (create) {
+      try {
+        const { data, error } = await db.supabase.from('recipes').insert({
+          name,
+          kcal:        kcal ? Number(kcal) : null,
+          tags:        Array.isArray(tags) ? tags : [],
+          ingredients: Array.isArray(ingredients) ? ingredients : [],
+          baby:        false,
+          user_id:     userId,
+        }).select().single();
+        if (error) throw error;
+        return res.json({ recipe: data });
+      } catch (err) {
+        console.error('[recipes POST create]', err.message);
+        if (err.code === '23505') return res.status(409).json({ error: '같은 이름의 레시피가 이미 있습니다.' });
+        return res.status(500).json({ error: 'Server error' });
+      }
+    }
+
+    /* AI 조리법 생성 */
+    try {
+      const { data: recipe, error } = await selectRecipe(db.supabase, name, userId);
       if (error) throw error;
       if (!recipe) return res.status(404).json({ error: '레시피를 찾을 수 없습니다.' });
 
-      // 이미 조리법 있으면 바로 반환
       if (Array.isArray(recipe.steps) && recipe.steps.length > 0) {
         return res.json({ recipe });
       }
 
       const detail = await generateDetail(recipe);
-
       await db.supabase.from('recipes').update(detail).eq('name', name);
-
       return res.json({ recipe: { ...recipe, ...detail } });
     } catch (err) {
       console.error('[recipes POST]', err.message);
@@ -119,18 +156,21 @@ export default async function handler(req, res) {
   /* ── GET ── */
   if (req.method !== 'GET') return res.status(405).end();
 
+  const userFilter = `user_id.is.null,user_id.eq.${userId}`;
+
   try {
     const { name } = req.query;
 
     if (name) {
-      const { data, error } = await selectRecipe(db.supabase, name);
+      const { data, error } = await selectRecipe(db.supabase, name, userId);
       if (error) throw error;
       return res.json({ recipe: data ?? null });
     }
 
     const fullList = await db.supabase
       .from('recipes')
-      .select('name, kcal, baby, baby_note, tags, prep_time, cook_time, serving, ingredients')
+      .select('name, kcal, baby, baby_note, tags, prep_time, cook_time, serving, ingredients, user_id')
+      .or(userFilter)
       .order('name');
 
     const { data, error } = fullList.error
