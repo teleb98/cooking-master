@@ -128,10 +128,14 @@ export default async function handler(req, res) {
       return res.json({ recipe: data ?? null });
     }
 
-    const { data, error } = await db.supabase
+    const fullList = await db.supabase
       .from('recipes')
-      .select('name, kcal, baby, baby_note, tags')
+      .select('name, kcal, baby, baby_note, tags, prep_time, cook_time, serving, ingredients')
       .order('name');
+
+    const { data, error } = fullList.error
+      ? await db.supabase.from('recipes').select('name, kcal, baby, baby_note, tags').order('name')
+      : fullList;
 
     if (error) throw error;
     res.json({ recipes: data ?? [] });

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
 import { Sheet } from '../components/Sheet';
 import Icon from '../icons';
+import { DAYS_KR, MEAL_TYPES } from '../data';
 
 const TOKEN_KEY = 'cookingMaster_token';
 
@@ -134,6 +135,8 @@ function StepsSection({ steps, loading, error, onRetry, accent }) {
   );
 }
 
+function toDateStr(d) { return d.toISOString().slice(0, 10); }
+
 /* ── 메인 컴포넌트 ──────────────────────────────────────── */
 export default function RecipeSheet() {
   const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion, showToast } = useApp();
@@ -144,9 +147,25 @@ export default function RecipeSheet() {
   const [genLoading, setGenLoading]   = useState(false);
   const [genError, setGenError]       = useState(false);
   const [deleting, setDeleting]       = useState(false);
+  const [addMode, setAddMode]         = useState(false);
+  const [pickDate, setPickDate]       = useState(null);
+  const [pickMeal, setPickMeal]       = useState(null);
+  const [adding, setAdding]           = useState(false);
 
   const name = recipe?.name ?? null;
   const [baseError, setBaseError] = useState(false);
+
+  const weekDates = useMemo(() => {
+    const today = new Date();
+    const dow = today.getUTCDay();
+    const diff = dow === 0 ? -6 : 1 - dow;
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setUTCDate(today.getUTCDate() + diff + i);
+      d.setUTCHours(0, 0, 0, 0);
+      return d;
+    });
+  }, []);
 
   const fetchInfo = useCallback((recipeName) => {
     setBaseLoading(true);
@@ -158,9 +177,10 @@ export default function RecipeSheet() {
       .finally(() => setBaseLoading(false));
   }, []);
 
-  /* 기본 레시피 로드 */
+  /* 기본 레시피 로드 + 픽커 상태 초기화 */
   useEffect(() => {
     if (!name) { setInfo(null); setBaseError(false); return; }
+    setAddMode(false); setPickDate(null); setPickMeal(null);
     fetchInfo(name);
   }, [name, fetchInfo]);
 
@@ -206,6 +226,23 @@ export default function RecipeSheet() {
     await saveProfile({ food_likes: [...likes, recipe.name] });
     showToast(`"${recipe.name}"이 즐겨찾기에 추가됐어요`, 'success');
   }, [recipe, family, saveProfile, showToast]);
+
+  const handleAddToMeal = async () => {
+    if (!pickDate || !pickMeal) return;
+    setAdding(true);
+    try {
+      await apiFetch('/meals', {
+        method: 'PUT',
+        body: JSON.stringify({ plan_date: pickDate, meal_type: pickMeal, menu_name: name }),
+      });
+      bumpMealVersion();
+      showToast(`${MEAL_TYPES.find(m => m.key === pickMeal)?.kr}에 "${name}"이 추가됐어요`, 'success');
+      setRecipe(null);
+    } catch {
+      showToast('식단 추가에 실패했어요', 'error');
+      setAdding(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!recipe?.plan_date) return;
@@ -324,38 +361,108 @@ export default function RecipeSheet() {
               </>
             )}
 
-            {/* 액션 버튼 — 1행: 삭제·교체, 2행: 즐겨찾기·확인 */}
-            {recipe?.plan_date && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: deleting ? 'var(--ink-4)' : '#E53E3E', fontSize: 13, fontWeight: 600 }}
-                >
-                  {deleting ? '삭제 중…' : '메뉴 삭제'}
-                </button>
-                <button
-                  onClick={handleReplace}
-                  style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}
-                >
-                  메뉴 교체
-                </button>
-              </div>
+            {/* 액션 버튼 */}
+            {addMode ? (
+              <>
+                <SectionLabel kr="날짜 선택" en="Date" />
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {weekDates.map((d, i) => {
+                    const ds = toDateStr(d);
+                    const todayStr = toDateStr(new Date());
+                    const active = pickDate === ds;
+                    return (
+                      <button key={ds} onClick={() => setPickDate(ds)} style={{
+                        flex: 1, padding: '9px 2px', borderRadius: 10, fontSize: 11.5, fontWeight: 600,
+                        background: active ? accent : 'var(--surface)',
+                        color: active ? '#fff' : 'var(--ink)',
+                        border: active ? 'none' : '1px solid var(--line)',
+                      }}>
+                        <div style={{ fontSize: 10, color: active ? 'rgba(255,255,255,0.75)' : 'var(--ink-3)', marginBottom: 2 }}>{DAYS_KR[i]}</div>
+                        <div>{d.getUTCDate()}</div>
+                        {ds === todayStr && <div style={{ fontSize: 8.5, marginTop: 1, color: active ? 'rgba(255,255,255,0.8)' : accent }}>오늘</div>}
+                      </button>
+                    );
+                  })}
+                </div>
+                <SectionLabel kr="식사 선택" en="Meal type" />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {MEAL_TYPES.map(m => (
+                    <button key={m.key} onClick={() => setPickMeal(m.key)} style={{
+                      flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
+                      background: pickMeal === m.key ? accent : 'var(--surface)',
+                      color: pickMeal === m.key ? '#fff' : 'var(--ink-2)',
+                      border: pickMeal === m.key ? 'none' : '1px solid var(--line)',
+                    }}>
+                      {m.kr}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+                  <button onClick={() => setAddMode(false)} style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}>
+                    취소
+                  </button>
+                  <button
+                    onClick={handleAddToMeal}
+                    disabled={!pickDate || !pickMeal || adding}
+                    style={{ flex: 2, padding: '13px 0', borderRadius: 12, background: accent, color: '#fff', fontSize: 13, fontWeight: 600, opacity: (!pickDate || !pickMeal) ? 0.45 : 1 }}
+                  >
+                    {adding ? '추가 중…' : '식단에 추가'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {recipe?.plan_date && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
+                    <button
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: deleting ? 'var(--ink-4)' : '#E53E3E', fontSize: 13, fontWeight: 600 }}
+                    >
+                      {deleting ? '삭제 중…' : '메뉴 삭제'}
+                    </button>
+                    <button
+                      onClick={handleReplace}
+                      style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}
+                    >
+                      메뉴 교체
+                    </button>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 8, marginTop: recipe?.plan_date ? 8 : 24 }}>
+                  {!recipe?.plan_date && (
+                    <button
+                      onClick={() => setAddMode(true)}
+                      style={{ flex: 1, padding: '13px 0', borderRadius: 12, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}
+                    >
+                      + 식단에 추가
+                    </button>
+                  )}
+                  <button
+                    onClick={handleFavorite}
+                    style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                  >
+                    {Icon.heart(14)} 좋아하는 메뉴 추가
+                  </button>
+                  {recipe?.plan_date && (
+                    <button
+                      onClick={() => setRecipe(null)}
+                      style={{ flex: 1, padding: '13px 0', borderRadius: 12, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}
+                    >
+                      확인
+                    </button>
+                  )}
+                </div>
+                {!recipe?.plan_date && (
+                  <button
+                    onClick={() => setRecipe(null)}
+                    style={{ width: '100%', marginTop: 8, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600 }}
+                  >
+                    닫기
+                  </button>
+                )}
+              </>
             )}
-            <div style={{ display: 'flex', gap: 8, marginTop: recipe?.plan_date ? 8 : 24 }}>
-              <button
-                onClick={handleFavorite}
-                style={{ flex: 1, padding: '13px 0', borderRadius: 12, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--ink-2)', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
-              >
-                {Icon.heart(14)} 좋아하는 메뉴 추가
-              </button>
-              <button
-                onClick={() => setRecipe(null)}
-                style={{ flex: 1, padding: '13px 0', borderRadius: 12, background: accent, color: '#fff', fontSize: 13, fontWeight: 600 }}
-              >
-                확인
-              </button>
-            </div>
           </>
         )}
 

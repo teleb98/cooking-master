@@ -62,6 +62,8 @@ function Chip({ children, active, accent, onClick }) {
 
 function RecipeCard({ recipe, accent, onOpen }) {
   const emoji = recipeEmoji(recipe.name);
+  const totalTime = (recipe.prep_time ?? 0) + (recipe.cook_time ?? 0);
+  const ingCount  = Array.isArray(recipe.ingredients) ? recipe.ingredients.length : 0;
   return (
     <button
       onClick={onOpen}
@@ -87,9 +89,15 @@ function RecipeCard({ recipe, accent, onOpen }) {
           {recipe.baby && (
             <span style={{ fontSize: 9.5, padding: '2px 7px', borderRadius: 4, background: 'var(--baby-soft)', color: 'var(--baby-ink)', fontWeight: 600, flexShrink: 0 }}>이유식</span>
           )}
-          {(recipe.tags ?? []).slice(0, 3).map(t => (
+          {(recipe.tags ?? []).slice(0, 2).map(t => (
             <span key={t} style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{t}</span>
           ))}
+          {totalTime > 0 && (
+            <span style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>⏱ {totalTime}분</span>
+          )}
+          {ingCount > 0 && (
+            <span style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>재료 {ingCount}가지</span>
+          )}
         </div>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
