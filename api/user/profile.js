@@ -1,5 +1,14 @@
 import { db, fmt } from '../_db.js';
 import { verifyToken, toPublicUser } from '../_auth.js';
+import webpush from 'web-push';
+
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:chiwon@gmail.com',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  );
+}
 
 async function getFamilyMembers(groupId) {
   if (!groupId) return [];
@@ -77,7 +86,49 @@ async function ensureFamilyGroup({ uid, userName, familyType, partnerName, shopp
   return groupId;
 }
 
+async function handleCronNotify(res) {
+  const { data: profiles } = await db.supabase
+    .from('user_profiles')
+    .select('user_id, push_subscription')
+    .not('push_subscription', 'is', null);
+
+  const expiredIds = [];
+  const results = await Promise.allSettled(
+    (profiles ?? []).map(async p => {
+      try {
+        await webpush.sendNotification(
+          p.push_subscription,
+          JSON.stringify({ title: 'Cooking Master', body: '오늘의 식단을 확인해보세요 🍱', url: '/calendar' }),
+        );
+      } catch (err) {
+        if (err.statusCode === 410 || err.statusCode === 404) expiredIds.push(p.user_id);
+        else throw err;
+      }
+    })
+  );
+
+  if (expiredIds.length) {
+    await db.supabase.from('user_profiles')
+      .update({ push_subscription: null })
+      .in('user_id', expiredIds);
+  }
+
+  const sent   = results.filter(r => r.status === 'fulfilled').length - expiredIds.length;
+  const failed = results.filter(r => r.status === 'rejected').length;
+  return res.json({ ok: true, sent, expired: expiredIds.length, failed });
+}
+
 export default async function handler(req, res) {
+  // Vercel Cron — no user auth, secured by CRON_SECRET
+  if (req.method === 'GET' && req.query.cron === 'notify') {
+    const cronSecret = process.env.CRON_SECRET;
+    if (!cronSecret || req.headers.authorization !== `Bearer ${cronSecret}`) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    try { return await handleCronNotify(res); }
+    catch (err) { return res.status(500).json({ error: err.message }); }
+  }
+
   const payload = verifyToken(req);
   if (!payload) return res.status(401).json({ error: 'Unauthorized' });
   const uid = payload.userId;
@@ -127,6 +178,13 @@ export default async function handler(req, res) {
       const resolvedGroupId = groupId ?? profile?.family_group_id;
       const members = await getFamilyMembers(resolvedGroupId);
       return res.json({ profile, members });
+    }
+
+    if (req.method === 'POST') {
+      const { push_subscription } = req.body ?? {};
+      await db.supabase.from('user_profiles')
+        .upsert({ user_id: uid, push_subscription, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      return res.json({ ok: true });
     }
 
     if (req.method === 'DELETE') {

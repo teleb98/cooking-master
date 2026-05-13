@@ -9,5 +9,8 @@
     "api/ai/chat.js":          { "maxDuration": 60 },
     "api/ai/generate-plan.js": { "maxDuration": 60 },
     "api/recipes/index.js":    { "maxDuration": 30 }
-  }
+  },
+  "crons": [
+    { "path": "/api/user/profile?cron=notify", "schedule": "0 11 * * *" }
+  ]
 }
