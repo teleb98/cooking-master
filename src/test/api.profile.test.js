@@ -1,7 +1,5 @@
-/**
- * API handler tests for /api/user/profile (GET, PUT, DELETE)
- */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import webpushMod from 'web-push';
 
 vi.mock('jsonwebtoken', () => ({
   default: {
@@ -18,10 +16,17 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: () => supabaseMock,
 }));
 
+vi.mock('web-push', () => ({
+  default: {
+    setVapidDetails: vi.fn(),
+    sendNotification: vi.fn(),
+  },
+}));
+
 const { default: handler } = await import('../../api/user/profile.js');
 
-function makeReq({ method = 'GET', body = {}, token = 'valid-token' } = {}) {
-  return { method, body, headers: { authorization: `Bearer ${token}` } };
+function makeReq({ method = 'GET', body = {}, token = 'valid-token', query = {} } = {}) {
+  return { method, body, headers: { authorization: `Bearer ${token}` }, query };
 }
 function makeRes() {
   const r = { _status: 200, _body: null };
@@ -33,12 +38,16 @@ function makeRes() {
 function chainQuery(data, error = null) {
   const terminal = { data, error };
   const chain = {
-    select:  vi.fn().mockReturnThis(),
-    insert:  vi.fn().mockReturnThis(),
-    upsert:  vi.fn().mockReturnThis(),
-    update:  vi.fn().mockReturnThis(),
-    delete:  vi.fn().mockReturnThis(),
-    eq:      vi.fn().mockReturnThis(),
+    select:      vi.fn().mockReturnThis(),
+    insert:      vi.fn().mockReturnThis(),
+    upsert:      vi.fn().mockReturnThis(),
+    update:      vi.fn().mockReturnThis(),
+    delete:      vi.fn().mockReturnThis(),
+    eq:          vi.fn().mockReturnThis(),
+    in:          vi.fn().mockReturnThis(),
+    not:         vi.fn().mockReturnThis(),
+    or:          vi.fn().mockReturnThis(),
+    order:       vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue(terminal),
     single:      vi.fn().mockResolvedValue(terminal),
     then: (r) => Promise.resolve(terminal).then(r),
@@ -110,6 +119,117 @@ describe('PUT /api/user/profile', () => {
   });
 });
 
+// ── POST (push subscription) ──────────────────────────────────────────────────
+describe('POST /api/user/profile (push subscription)', () => {
+  it('saves push_subscription and returns ok', async () => {
+    supabaseMock.from.mockImplementation(() => chainQuery({ user_id: 'user-1' }));
+    const sub = { endpoint: 'https://fcm.googleapis.com/send/123', keys: { p256dh: 'abc', auth: 'xyz' } };
+    const res = makeRes();
+    await handler(makeReq({ method: 'POST', body: { push_subscription: sub } }), res);
+    expect(res._status).toBe(200);
+    expect(res._body.ok).toBe(true);
+  });
+
+  it('returns 401 without valid token', async () => {
+    const res = makeRes();
+    await handler(makeReq({ method: 'POST', token: 'bad', body: { push_subscription: {} } }), res);
+    expect(res._status).toBe(401);
+  });
+
+  it('calls upsert with push_subscription on user_profiles', async () => {
+    const upsertMock = vi.fn().mockResolvedValue({ error: null });
+    const chain = chainQuery(null);
+    chain.upsert = upsertMock;
+    supabaseMock.from.mockReturnValue(chain);
+
+    const sub = { endpoint: 'https://push.example.com/1', keys: {} };
+    await handler(makeReq({ method: 'POST', body: { push_subscription: sub } }), makeRes());
+    expect(upsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 'user-1', push_subscription: sub }),
+      expect.any(Object),
+    );
+  });
+});
+
+// ── GET cron=notify ───────────────────────────────────────────────────────────
+describe('GET /api/user/profile?cron=notify', () => {
+  beforeEach(() => { process.env.CRON_SECRET = 'test-cron-secret'; });
+  afterEach(() => { delete process.env.CRON_SECRET; });
+
+  function cronReq() {
+    return { method: 'GET', query: { cron: 'notify' }, headers: { authorization: 'Bearer test-cron-secret' }, body: {} };
+  }
+
+  it('returns 401 when authorization is wrong', async () => {
+    const res = makeRes();
+    await handler({ method: 'GET', query: { cron: 'notify' }, headers: { authorization: 'Bearer wrong' }, body: {} }, res);
+    expect(res._status).toBe(401);
+  });
+
+  it('returns 401 when CRON_SECRET is not set', async () => {
+    delete process.env.CRON_SECRET;
+    const res = makeRes();
+    await handler(cronReq(), res);
+    expect(res._status).toBe(401);
+  });
+
+  it('sends notifications to all subscribers and returns sent count', async () => {
+    const profiles = [
+      { user_id: 'u1', push_subscription: { endpoint: 'https://fcm.google.com/1', keys: {} } },
+      { user_id: 'u2', push_subscription: { endpoint: 'https://fcm.google.com/2', keys: {} } },
+    ];
+    supabaseMock.from.mockImplementation(() => chainQuery(profiles));
+    webpushMod.sendNotification.mockResolvedValue({});
+
+    const res = makeRes();
+    await handler(cronReq(), res);
+    expect(res._status).toBe(200);
+    expect(res._body.sent).toBe(2);
+    expect(res._body.expired).toBe(0);
+    expect(webpushMod.sendNotification).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks expired subscriptions (410) and clears them from DB', async () => {
+    const profiles = [
+      { user_id: 'u1', push_subscription: { endpoint: 'https://fcm.google.com/1', keys: {} } },
+      { user_id: 'u2', push_subscription: { endpoint: 'https://fcm.google.com/2', keys: {} } },
+    ];
+    supabaseMock.from.mockImplementation(() => chainQuery(profiles));
+    webpushMod.sendNotification.mockRejectedValue(Object.assign(new Error('Gone'), { statusCode: 410 }));
+
+    const res = makeRes();
+    await handler(cronReq(), res);
+    expect(res._status).toBe(200);
+    expect(res._body.sent).toBe(0);
+    expect(res._body.expired).toBe(2);
+    expect(supabaseMock.from).toHaveBeenCalledWith('user_profiles');
+  });
+
+  it('returns ok with 0 counts when no subscribers', async () => {
+    supabaseMock.from.mockImplementation(() => chainQuery([]));
+    const res = makeRes();
+    await handler(cronReq(), res);
+    expect(res._status).toBe(200);
+    expect(res._body.sent).toBe(0);
+    expect(res._body.expired).toBe(0);
+    expect(webpushMod.sendNotification).not.toHaveBeenCalled();
+  });
+
+  it('does not affect normal GET when query.cron is absent', async () => {
+    const fakeUser    = { id: 'user-1', name: '테스트', email: 't@t.com', provider: 'google', avatar_url: null, created_at: new Date(), last_login_at: new Date() };
+    const fakeProfile = { user_id: 'user-1', family_type: 'solo', shopping_day: 6, food_likes: [], allergies: [] };
+    supabaseMock.from.mockImplementation((table) => {
+      if (table === 'users')         return chainQuery(fakeUser);
+      if (table === 'user_profiles') return chainQuery(fakeProfile);
+      return chainQuery(null);
+    });
+    const res = makeRes();
+    await handler(makeReq({ query: {} }), res);
+    expect(res._status).toBe(200);
+    expect(res._body.user).toBeDefined();
+  });
+});
+
 // ── DELETE ────────────────────────────────────────────────────────────────────
 describe('DELETE /api/user/profile', () => {
   it('deletes all user data and returns ok', async () => {
@@ -120,7 +240,6 @@ describe('DELETE /api/user/profile', () => {
     await handler(makeReq({ method: 'DELETE' }), res);
     expect(res._status).toBe(200);
     expect(res._body).toEqual({ ok: true });
-    // Verify from() was called for all tables
     expect(supabaseMock.from).toHaveBeenCalledWith('meal_plans');
     expect(supabaseMock.from).toHaveBeenCalledWith('grocery_items');
     expect(supabaseMock.from).toHaveBeenCalledWith('user_profiles');

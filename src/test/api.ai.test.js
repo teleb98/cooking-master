@@ -49,6 +49,8 @@ function chainQuery(data, error = null) {
     eq:     vi.fn().mockReturnThis(),
     gte:    vi.fn().mockReturnThis(),
     lte:    vi.fn().mockReturnThis(),
+    or:     vi.fn().mockReturnThis(),
+    not:    vi.fn().mockReturnThis(),
     order:  vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue({ data, error }),
     upsert: vi.fn().mockResolvedValue({ error: null }),

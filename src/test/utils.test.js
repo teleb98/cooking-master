@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ── Inline copies of pure functions under test ──────────────────────────────
 // (avoids JSX/browser-only imports while still testing the real logic)
@@ -190,5 +190,89 @@ describe('addDays', () => {
 
   it('handles 0 days (no change)', () => {
     expect(addDays('2025-05-06', 0)).toBe('2025-05-06');
+  });
+});
+
+// ── getMonthGrid ──────────────────────────────────────────────────────────────
+// Inline copy of the pure logic from CalendarScreen (avoids React imports)
+function getMonthGrid(monthOffset) {
+  const today = new Date();
+  const firstOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + monthOffset, 1));
+  const lastOfMonth  = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + monthOffset + 1, 0));
+  const dow = firstOfMonth.getUTCDay();
+  const startOffset = dow === 0 ? -6 : 1 - dow;
+  const gridStart = new Date(firstOfMonth);
+  gridStart.setUTCDate(firstOfMonth.getUTCDate() + startOffset);
+  const totalCells = Math.ceil((lastOfMonth.getUTCDate() - startOffset) / 7) * 7;
+  return {
+    year:  firstOfMonth.getUTCFullYear(),
+    month: firstOfMonth.getUTCMonth(),
+    dates: Array.from({ length: totalCells }, (_, i) => {
+      const d = new Date(gridStart);
+      d.setUTCDate(gridStart.getUTCDate() + i);
+      return d;
+    }),
+  };
+}
+
+describe('getMonthGrid', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it('첫 번째 셀은 항상 월요일', () => {
+    vi.setSystemTime(new Date('2026-05-13T12:00:00Z'));
+    const grid = getMonthGrid(0);
+    expect(grid.dates[0].getUTCDay()).toBe(1);
+  });
+
+  it('May 2026 (1일=금요일) → 35칸 반환', () => {
+    vi.setSystemTime(new Date('2026-05-13T12:00:00Z'));
+    const grid = getMonthGrid(0);
+    expect(grid.dates).toHaveLength(35);
+    expect(grid.year).toBe(2026);
+    expect(grid.month).toBe(4);
+  });
+
+  it('6주 걸치는 달(1일=일요일) → 42칸 반환', () => {
+    // Oct 2023: 1일이 일요일 → 6주 필요
+    vi.setSystemTime(new Date('2023-10-15T12:00:00Z'));
+    const grid = getMonthGrid(0);
+    expect(grid.dates).toHaveLength(42);
+  });
+
+  it('monthOffset=1 → 다음 달 반환', () => {
+    vi.setSystemTime(new Date('2026-05-13T12:00:00Z'));
+    const grid = getMonthGrid(1);
+    expect(grid.year).toBe(2026);
+    expect(grid.month).toBe(5); // June
+    expect(grid.dates[0].getUTCDay()).toBe(1);
+  });
+
+  it('monthOffset=-1 → 이전 달 반환', () => {
+    vi.setSystemTime(new Date('2026-05-13T12:00:00Z'));
+    const grid = getMonthGrid(-1);
+    expect(grid.month).toBe(3); // April
+  });
+
+  it('연도 경계 넘기 (12월 → 1월)', () => {
+    vi.setSystemTime(new Date('2025-12-15T12:00:00Z'));
+    const grid = getMonthGrid(1);
+    expect(grid.year).toBe(2026);
+    expect(grid.month).toBe(0); // January
+  });
+
+  it('모든 날짜가 정확히 하루 간격', () => {
+    vi.setSystemTime(new Date('2026-05-13T12:00:00Z'));
+    const { dates } = getMonthGrid(0);
+    for (let i = 1; i < dates.length; i++) {
+      expect(dates[i].getTime() - dates[i - 1].getTime()).toBe(86400_000);
+    }
+  });
+
+  it('그리드에 해당 달 날짜가 모두 포함됨', () => {
+    vi.setSystemTime(new Date('2026-05-13T12:00:00Z'));
+    const { dates, month } = getMonthGrid(0);
+    const daysInMonth = dates.filter(d => d.getUTCMonth() === month);
+    expect(daysInMonth).toHaveLength(31); // May has 31 days
   });
 });
