@@ -383,7 +383,7 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
 export default function ProfileScreen() {
   const { accent, setAccent, theme, setTheme, showToast } = useApp();
   const { user, logout } = useAuth();
-  const { family, profile, members, saveProfile } = useFamily();
+  const { family, profile, members, saveProfile, vapidPublicKey } = useFamily();
   const navigate = useNavigate();
 
   const [editOpen,     setEditOpen]     = useState(false);
@@ -392,6 +392,57 @@ export default function ProfileScreen() {
   const [inviteUrl,    setInviteUrl]    = useState(null);
   const [inviteExp,    setInviteExp]    = useState(null);
   const [copied,       setCopied]       = useState(false);
+
+  const pushSupported = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushDenied,  setPushDenied]  = useState(false);
+
+  useEffect(() => {
+    if (!pushSupported) return;
+    if (Notification.permission === 'denied') { setPushDenied(true); return; }
+    navigator.serviceWorker.ready.then(reg =>
+      reg.pushManager.getSubscription().then(sub => setPushEnabled(!!sub))
+    );
+  }, [pushSupported]);
+
+  const togglePush = async () => {
+    if (pushLoading || !vapidPublicKey) return;
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (pushEnabled) {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) await sub.unsubscribe();
+        await fetch('/api/user/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ push_subscription: null }),
+        });
+        setPushEnabled(false);
+      } else {
+        const perm = await Notification.requestPermission();
+        if (perm === 'denied') { setPushDenied(true); return; }
+        if (perm !== 'granted') return;
+        const padding = '='.repeat((4 - vapidPublicKey.length % 4) % 4);
+        const base64 = (vapidPublicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const appKey = Uint8Array.from([...window.atob(base64)].map(c => c.charCodeAt(0)));
+        const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: appKey });
+        await fetch('/api/user/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ push_subscription: sub.toJSON() }),
+        });
+        setPushEnabled(true);
+        showToast('알림이 설정되었어요', 'success');
+      }
+    } catch {
+      showToast('알림 설정에 실패했어요');
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   const loadInvite = async () => {
     setInviteState('loading');
@@ -730,6 +781,47 @@ export default function ProfileScreen() {
         <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--ink-3)' }}>
           <span>월요일 기준 {family.shopping_day_kr}요일 장보기</span>
         </div>
+      </div>
+
+      {/* 알림 */}
+      <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
+        <div className="kr-en" style={{ marginBottom: 12 }}>NOTIFICATIONS · 알림</div>
+        {!pushSupported ? (
+          <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>이 브라우저는 알림을 지원하지 않아요.</div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>식단 알림</div>
+              <div style={{ fontSize: 12, color: pushDenied ? '#C0392B' : 'var(--ink-3)', marginTop: 3, lineHeight: 1.5 }}>
+                {pushDenied
+                  ? '브라우저 설정에서 알림을 허용해주세요'
+                  : pushEnabled
+                    ? '매일 오전 11시에 식단을 알려드릴게요'
+                    : '켜면 매일 오전 11시에 식단을 알려드려요'}
+              </div>
+            </div>
+            <button
+              onClick={togglePush}
+              disabled={pushLoading || pushDenied || !vapidPublicKey}
+              aria-label={pushEnabled ? '알림 끄기' : '알림 켜기'}
+              style={{
+                width: 48, height: 28, borderRadius: 14, padding: 2, border: 'none',
+                background: pushEnabled ? accent : 'var(--bg-2)',
+                transition: 'background 200ms',
+                position: 'relative', flexShrink: 0,
+                opacity: (pushDenied || !vapidPublicKey) ? 0.35 : 1,
+                cursor: (pushLoading || pushDenied || !vapidPublicKey) ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%', background: '#fff',
+                position: 'absolute', top: 2, left: pushEnabled ? 22 : 2,
+                transition: 'left 200ms',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+              }} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 다크 모드 */}

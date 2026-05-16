@@ -141,7 +141,7 @@ export default async function handler(req, res) {
       ]);
       if (!userRow) return res.status(401).json({ error: 'User not found' });
       const members = await getFamilyMembers(profile?.family_group_id);
-      return res.json({ user: toPublicUser(userRow, fmt), profile: profile ?? {}, members });
+      return res.json({ user: toPublicUser(userRow, fmt), profile: profile ?? {}, members, vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null });
     }
 
     if (req.method === 'PUT') {

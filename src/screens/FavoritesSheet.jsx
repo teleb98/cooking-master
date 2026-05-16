@@ -33,8 +33,10 @@ export default function FavoritesSheet() {
   const [saving, setSaving]         = useState(false);
   const [listening, setListening]   = useState(false);
   const [identifying, setIdentifying] = useState(false);
+  const [photoMenu, setPhotoMenu]   = useState(false);
   const recognitionRef = useRef(null);
-  const fileRef        = useRef(null);
+  const cameraRef      = useRef(null);
+  const galleryRef     = useRef(null);
 
   const likes = family.food_likes ?? [];
 
@@ -46,6 +48,7 @@ export default function FavoritesSheet() {
       }
     } else {
       setInput('');
+      setPhotoMenu(false);
       recognitionRef.current?.abort();
       setListening(false);
     }
@@ -212,13 +215,13 @@ export default function FavoritesSheet() {
 
           {/* 사진 버튼 */}
           <button
-            onClick={() => fileRef.current?.click()}
+            onClick={() => { if (!identifying) setPhotoMenu(v => !v); }}
             disabled={identifying}
             style={{
               width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
-              background: identifying ? accent : 'var(--surface)',
-              border: identifying ? 'none' : '1px solid var(--line)',
-              color: identifying ? '#fff' : 'var(--ink-3)',
+              background: identifying ? accent : photoMenu ? accent : 'var(--surface)',
+              border: (identifying || photoMenu) ? 'none' : '1px solid var(--line)',
+              color: (identifying || photoMenu) ? '#fff' : 'var(--ink-3)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'background 200ms',
             }}
@@ -232,7 +235,8 @@ export default function FavoritesSheet() {
               </svg>
             ) : Icon.camera(16)}
           </button>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} style={{ display: 'none' }} />
+          <input ref={cameraRef}  type="file" accept="image/*" capture="environment" onChange={handlePhoto} style={{ display: 'none' }} />
+          <input ref={galleryRef} type="file" accept="image/*" onChange={handlePhoto} style={{ display: 'none' }} />
 
           {/* 추가 버튼 */}
           <button
@@ -251,8 +255,42 @@ export default function FavoritesSheet() {
           </button>
         </div>
 
+        {/* 사진 소스 선택 메뉴 */}
+        {photoMenu && !identifying && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button
+              onClick={() => { setPhotoMenu(false); cameraRef.current?.click(); }}
+              style={{
+                flex: 1, padding: '10px 0', borderRadius: 10,
+                background: 'var(--bg)', border: '1px solid var(--line)',
+                fontSize: 13, fontWeight: 600, color: 'var(--ink-2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="13" r="4"/><path d="M5 7h1a2 2 0 0 0 1.414-.586l1.172-1.172A2 2 0 0 1 10 4.758h4a2 2 0 0 1 1.414.586l1.172 1.172A2 2 0 0 0 18 7h1a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/>
+              </svg>
+              카메라로 찍기
+            </button>
+            <button
+              onClick={() => { setPhotoMenu(false); galleryRef.current?.click(); }}
+              style={{
+                flex: 1, padding: '10px 0', borderRadius: 10,
+                background: 'var(--bg)', border: '1px solid var(--line)',
+                fontSize: 13, fontWeight: 600, color: 'var(--ink-2)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+              </svg>
+              저장 사진 선택
+            </button>
+          </div>
+        )}
+
         <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.5 }}>
-          텍스트 입력 · {hasSpeech ? '음성 인식' : '음성(미지원 브라우저)'} · 사진으로 음식 인식
+          텍스트 입력 · {hasSpeech ? '음성 인식' : '음성(미지원 브라우저)'} · 카메라 또는 저장 사진으로 음식 인식
         </div>
       </div>
     </Sheet>
