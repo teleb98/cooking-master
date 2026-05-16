@@ -276,3 +276,100 @@ describe('getMonthGrid', () => {
     expect(daysInMonth).toHaveLength(31); // May has 31 days
   });
 });
+
+// ── detectPartnerChange ───────────────────────────────────────────────────────
+// Inline copy of the pure function from CalendarScreen.jsx
+function detectPartnerChange(prev, next, skipKeys) {
+  const allKeys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  for (const key of allKeys) {
+    if (skipKeys.has(key)) continue;
+    if ((prev[key]?.menu_name ?? null) !== (next[key]?.menu_name ?? null)) return true;
+  }
+  return false;
+}
+
+describe('detectPartnerChange', () => {
+  it('두 맵이 동일하면 false 반환', () => {
+    const meals = { '2026-05-13_breakfast': { menu_name: '오트밀' } };
+    expect(detectPartnerChange(meals, meals, new Set())).toBe(false);
+  });
+
+  it('두 맵이 모두 비어있으면 false 반환', () => {
+    expect(detectPartnerChange({}, {}, new Set())).toBe(false);
+  });
+
+  it('menu_name이 새로 추가되면 true 반환', () => {
+    const prev = { '2026-05-13_breakfast': { menu_name: null } };
+    const next = { '2026-05-13_breakfast': { menu_name: '오트밀' } };
+    expect(detectPartnerChange(prev, next, new Set())).toBe(true);
+  });
+
+  it('menu_name이 null로 바뀌면 (메뉴 삭제) true 반환', () => {
+    const prev = { '2026-05-13_breakfast': { menu_name: '오트밀' } };
+    const next = { '2026-05-13_breakfast': { menu_name: null } };
+    expect(detectPartnerChange(prev, next, new Set())).toBe(true);
+  });
+
+  it('menu_name이 다른 값으로 변경되면 true 반환', () => {
+    const prev = { '2026-05-13_lunch': { menu_name: '비빔밥' } };
+    const next = { '2026-05-13_lunch': { menu_name: '불고기' } };
+    expect(detectPartnerChange(prev, next, new Set())).toBe(true);
+  });
+
+  it('변경된 key가 skipKeys에 있으면 false 반환 (오탐 방지)', () => {
+    const prev = { '2026-05-13_lunch': { menu_name: '비빔밥' } };
+    const next = { '2026-05-13_lunch': { menu_name: '불고기' } };
+    expect(detectPartnerChange(prev, next, new Set(['2026-05-13_lunch']))).toBe(false);
+  });
+
+  it('next에만 새 key가 있으면 (파트너 메뉴 추가) true 반환', () => {
+    const prev = {};
+    const next = { '2026-05-14_dinner': { menu_name: '삼겹살' } };
+    expect(detectPartnerChange(prev, next, new Set())).toBe(true);
+  });
+
+  it('prev에만 있고 next에서 사라지면 (파트너 메뉴 삭제) true 반환', () => {
+    const prev = { '2026-05-14_dinner': { menu_name: '삼겹살' } };
+    const next = {};
+    expect(detectPartnerChange(prev, next, new Set())).toBe(true);
+  });
+
+  it('kcal 등 menu_name 외 필드만 다르면 false 반환', () => {
+    const prev = { '2026-05-13_breakfast': { menu_name: '오트밀', kcal: 300 } };
+    const next = { '2026-05-13_breakfast': { menu_name: '오트밀', kcal: 320 } };
+    expect(detectPartnerChange(prev, next, new Set())).toBe(false);
+  });
+
+  it('skipKeys는 지정된 key만 건너뛰고 나머지 변경은 감지', () => {
+    const prev = {
+      '2026-05-13_breakfast': { menu_name: '오트밀' },
+      '2026-05-13_lunch':     { menu_name: '비빔밥' },
+    };
+    const next = {
+      '2026-05-13_breakfast': { menu_name: '토스트' }, // 변경됐지만 skip
+      '2026-05-13_lunch':     { menu_name: '불고기' }, // 변경 + skip 없음
+    };
+    expect(detectPartnerChange(prev, next, new Set(['2026-05-13_breakfast']))).toBe(true);
+  });
+
+  it('skipKeys로 모든 변경을 건너뛰면 false 반환', () => {
+    const prev = { '2026-05-13_lunch': { menu_name: '비빔밥' } };
+    const next = { '2026-05-13_lunch': { menu_name: '불고기' } };
+    const skip = new Set(['2026-05-13_lunch']);
+    expect(detectPartnerChange(prev, next, skip)).toBe(false);
+  });
+
+  it('여러 key 중 하나라도 변경되면 true 반환', () => {
+    const prev = {
+      '2026-05-13_breakfast': { menu_name: '오트밀' },
+      '2026-05-13_lunch':     { menu_name: '비빔밥' },
+      '2026-05-13_dinner':    { menu_name: '된장찌개' },
+    };
+    const next = {
+      '2026-05-13_breakfast': { menu_name: '오트밀' },   // 동일
+      '2026-05-13_lunch':     { menu_name: '비빔밥' },   // 동일
+      '2026-05-13_dinner':    { menu_name: '삼겹살' },   // 변경
+    };
+    expect(detectPartnerChange(prev, next, new Set())).toBe(true);
+  });
+});

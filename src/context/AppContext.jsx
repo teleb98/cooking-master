@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
 
 const AppContext = createContext(null);
 
@@ -37,6 +37,13 @@ export function AppProvider({ children }) {
 
   const bumpMealVersion = useCallback(() => setMealVersion(v => v + 1), []);
 
+  // 내가 직접 바꾼 meal key 집합 — 파트너 변경 감지 오탐 방지
+  const localMealChangesRef = useRef(new Set());
+  const markLocalMealChange = useCallback((key) => {
+    localMealChangesRef.current.add(key);
+    setTimeout(() => localMealChangesRef.current.delete(key), 2 * 60_000);
+  }, []);
+
   const showToast = useCallback((msg, type = 'error') => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ msg, type });
@@ -54,7 +61,7 @@ export function AppProvider({ children }) {
   }, []);
 
   return (
-    <AppContext.Provider value={{ accent, setAccent, theme, setTheme, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, toast, showToast, onboarded, markOnboarded, clearOnboarded, favoritesOpen, setFavoritesOpen, favoriteSeed, setFavoriteSeed }}>
+    <AppContext.Provider value={{ accent, setAccent, theme, setTheme, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, localMealChangesRef, markLocalMealChange, toast, showToast, onboarded, markOnboarded, clearOnboarded, favoritesOpen, setFavoritesOpen, favoriteSeed, setFavoriteSeed }}>
       {children}
     </AppContext.Provider>
   );

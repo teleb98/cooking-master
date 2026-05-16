@@ -81,6 +81,35 @@ describe('GET /api/user/profile', () => {
     expect(res._body.profile.family_type).toBe('couple');
   });
 
+  it('vapidPublicKey를 GET 응답에 포함', async () => {
+    process.env.VAPID_PUBLIC_KEY = 'test-vapid-public-key-xyz';
+    const fakeUser    = { id: 'user-1', name: '테스트', email: 't@t.com', provider: 'google', avatar_url: null, created_at: new Date(), last_login_at: new Date() };
+    const fakeProfile = { user_id: 'user-1', family_type: 'solo', shopping_day: 3, food_likes: [], allergies: [] };
+    supabaseMock.from.mockImplementation((table) => {
+      if (table === 'users')         return chainQuery(fakeUser);
+      if (table === 'user_profiles') return chainQuery(fakeProfile);
+      return chainQuery(null);
+    });
+    const res = makeRes();
+    await handler(makeReq(), res);
+    expect(res._body.vapidPublicKey).toBe('test-vapid-public-key-xyz');
+    delete process.env.VAPID_PUBLIC_KEY;
+  });
+
+  it('VAPID_PUBLIC_KEY 미설정 시 vapidPublicKey는 null', async () => {
+    delete process.env.VAPID_PUBLIC_KEY;
+    const fakeUser    = { id: 'user-1', name: '테스트', email: 't@t.com', provider: 'google', avatar_url: null, created_at: new Date(), last_login_at: new Date() };
+    const fakeProfile = { user_id: 'user-1', family_type: 'solo', shopping_day: 3, food_likes: [], allergies: [] };
+    supabaseMock.from.mockImplementation((table) => {
+      if (table === 'users')         return chainQuery(fakeUser);
+      if (table === 'user_profiles') return chainQuery(fakeProfile);
+      return chainQuery(null);
+    });
+    const res = makeRes();
+    await handler(makeReq(), res);
+    expect(res._body.vapidPublicKey).toBeNull();
+  });
+
   it('returns 401 when user row not found', async () => {
     supabaseMock.from.mockImplementation((table) => {
       if (table === 'users')         return chainQuery(null);
@@ -134,6 +163,14 @@ describe('POST /api/user/profile (push subscription)', () => {
     const res = makeRes();
     await handler(makeReq({ method: 'POST', token: 'bad', body: { push_subscription: {} } }), res);
     expect(res._status).toBe(401);
+  });
+
+  it('null subscription 저장 (알림 해제)', async () => {
+    supabaseMock.from.mockImplementation(() => chainQuery({ user_id: 'user-1' }));
+    const res = makeRes();
+    await handler(makeReq({ method: 'POST', body: { push_subscription: null } }), res);
+    expect(res._status).toBe(200);
+    expect(res._body.ok).toBe(true);
   });
 
   it('calls upsert with push_subscription on user_profiles', async () => {

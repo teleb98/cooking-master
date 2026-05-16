@@ -185,7 +185,7 @@ export default function CalendarScreen() {
   const [monthOffset, setMonthOffset] = useState(0);
   const monthGrid = useMemo(() => getMonthGrid(monthOffset), [monthOffset]);
 
-  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, showToast, setFavoritesOpen } = useApp();
+  const { accent, setChatOpen, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, localMealChangesRef, markLocalMealChange, showToast, setFavoritesOpen } = useApp();
   const { family } = useFamily();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -196,9 +196,7 @@ export default function CalendarScreen() {
   const today = new Date();
 
   // 파트너 변경 감지용 — { viewKey, meals } 형태로 이전 fetch 결과 보관
-  const prevMealsRef    = useRef(null);
-  // 로컬에서 직접 편집한 key 집합 (폴링 후 오탐 방지)
-  const localChangedRef = useRef(new Set());
+  const prevMealsRef = useRef(null);
 
   // 레시피 목록 (최초 1회)
   useEffect(() => {
@@ -215,7 +213,7 @@ export default function CalendarScreen() {
         const map = {};
         for (const m of (d.meals ?? [])) map[`${m.plan_date}_${m.meal_type}`] = m;
         if (family.partner_connected && prevMealsRef.current?.viewKey === weekStart) {
-          if (detectPartnerChange(prevMealsRef.current.meals, map, localChangedRef.current)) {
+          if (detectPartnerChange(prevMealsRef.current.meals, map, localMealChangesRef.current)) {
             showToast('파트너가 식단을 수정했어요', 'info');
           }
         }
@@ -240,7 +238,7 @@ export default function CalendarScreen() {
         const map = {};
         for (const m of (d.meals ?? [])) map[`${m.plan_date}_${m.meal_type}`] = m;
         if (family.partner_connected && prevMealsRef.current?.viewKey === viewKey) {
-          if (detectPartnerChange(prevMealsRef.current.meals, map, localChangedRef.current)) {
+          if (detectPartnerChange(prevMealsRef.current.meals, map, localMealChangesRef.current)) {
             showToast('파트너가 식단을 수정했어요', 'info');
           }
         }
@@ -287,8 +285,7 @@ export default function CalendarScreen() {
     setPicker(null);
     const key = `${plan_date}_${meal_type}`;
     // 폴링 오탐 방지: 내가 직접 바꾼 key는 2분간 변경 감지에서 제외
-    localChangedRef.current.add(key);
-    setTimeout(() => localChangedRef.current.delete(key), 2 * 60_000);
+    markLocalMealChange(key);
     // 낙관적 업데이트 + 레시피 즉시 표시 (await 전에 실행)
     setMeals(prev => ({
       ...prev,

@@ -313,3 +313,160 @@ describe('ChangeSelector', () => {
     expect(screen.getByTestId('check-0').textContent).toBe('✓'); // still selected
   });
 });
+
+// ── FavoritesSheet 사진 소스 선택 ────────────────────────────────────────────
+function PhotoSourceButton({ onCamera, onGallery, disabled = false }) {
+  const [photoMenu, setPhotoMenu] = useState(false);
+  return (
+    <div>
+      <button
+        data-testid="photo-btn"
+        onClick={() => { if (!disabled) setPhotoMenu(v => !v); }}
+        disabled={disabled}
+        aria-pressed={photoMenu}
+      />
+      {photoMenu && !disabled && (
+        <div data-testid="photo-menu">
+          <button data-testid="camera-option" onClick={() => { setPhotoMenu(false); onCamera(); }}>
+            카메라로 찍기
+          </button>
+          <button data-testid="gallery-option" onClick={() => { setPhotoMenu(false); onGallery(); }}>
+            저장 사진 선택
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+describe('FavoritesSheet 사진 소스 선택', () => {
+  it('기본 상태에서 사진 메뉴 숨김', () => {
+    render(<PhotoSourceButton onCamera={vi.fn()} onGallery={vi.fn()} />);
+    expect(screen.queryByTestId('photo-menu')).not.toBeInTheDocument();
+  });
+
+  it('카메라 버튼 클릭 시 메뉴 표시', () => {
+    render(<PhotoSourceButton onCamera={vi.fn()} onGallery={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('photo-btn'));
+    expect(screen.getByTestId('photo-menu')).toBeInTheDocument();
+    expect(screen.getByTestId('camera-option')).toBeInTheDocument();
+    expect(screen.getByTestId('gallery-option')).toBeInTheDocument();
+  });
+
+  it('같은 버튼 재클릭 시 메뉴 닫힘 (토글)', () => {
+    render(<PhotoSourceButton onCamera={vi.fn()} onGallery={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('photo-btn'));
+    expect(screen.getByTestId('photo-menu')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('photo-btn'));
+    expect(screen.queryByTestId('photo-menu')).not.toBeInTheDocument();
+  });
+
+  it('"카메라로 찍기" 선택 시 메뉴 닫히고 onCamera 호출', () => {
+    const onCamera = vi.fn();
+    render(<PhotoSourceButton onCamera={onCamera} onGallery={vi.fn()} />);
+    fireEvent.click(screen.getByTestId('photo-btn'));
+    fireEvent.click(screen.getByTestId('camera-option'));
+    expect(onCamera).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId('photo-menu')).not.toBeInTheDocument();
+  });
+
+  it('"저장 사진 선택" 클릭 시 메뉴 닫히고 onGallery 호출', () => {
+    const onGallery = vi.fn();
+    render(<PhotoSourceButton onCamera={vi.fn()} onGallery={onGallery} />);
+    fireEvent.click(screen.getByTestId('photo-btn'));
+    fireEvent.click(screen.getByTestId('gallery-option'));
+    expect(onGallery).toHaveBeenCalledOnce();
+    expect(screen.queryByTestId('photo-menu')).not.toBeInTheDocument();
+  });
+
+  it('disabled 상태에서 클릭해도 메뉴 열리지 않음', () => {
+    render(<PhotoSourceButton onCamera={vi.fn()} onGallery={vi.fn()} disabled />);
+    fireEvent.click(screen.getByTestId('photo-btn'));
+    expect(screen.queryByTestId('photo-menu')).not.toBeInTheDocument();
+  });
+
+  it('onCamera와 onGallery 각각 정확히 한 번만 호출', () => {
+    const onCamera  = vi.fn();
+    const onGallery = vi.fn();
+    render(<PhotoSourceButton onCamera={onCamera} onGallery={onGallery} />);
+    fireEvent.click(screen.getByTestId('photo-btn'));
+    fireEvent.click(screen.getByTestId('camera-option'));
+    expect(onCamera).toHaveBeenCalledTimes(1);
+    expect(onGallery).not.toHaveBeenCalled();
+  });
+});
+
+// ── ProfileScreen 알림 토글 상태 ─────────────────────────────────────────────
+function PushToggle({ supported, denied, enabled, loading, onToggle }) {
+  return (
+    <div>
+      {!supported ? (
+        <div data-testid="unsupported-msg">이 브라우저는 알림을 지원하지 않아요.</div>
+      ) : (
+        <>
+          <div data-testid="status-text">
+            {denied
+              ? '브라우저 설정에서 알림을 허용해주세요'
+              : enabled
+                ? '매일 오전 11시에 식단을 알려드릴게요'
+                : '켜면 매일 오전 11시에 식단을 알려드려요'}
+          </div>
+          <button
+            data-testid="push-toggle"
+            onClick={onToggle}
+            disabled={loading || denied}
+            aria-checked={enabled}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+describe('ProfileScreen 알림 토글', () => {
+  it('push 미지원 시 unsupported 메시지 표시, 토글 없음', () => {
+    render(<PushToggle supported={false} denied={false} enabled={false} loading={false} onToggle={vi.fn()} />);
+    expect(screen.getByTestId('unsupported-msg')).toBeInTheDocument();
+    expect(screen.queryByTestId('push-toggle')).not.toBeInTheDocument();
+  });
+
+  it('지원+비활성 상태에서 "켜면" 안내 문구 표시', () => {
+    render(<PushToggle supported denied={false} enabled={false} loading={false} onToggle={vi.fn()} />);
+    expect(screen.getByTestId('status-text').textContent).toContain('켜면');
+  });
+
+  it('활성 상태에서 "매일 오전 11시" 문구 표시', () => {
+    render(<PushToggle supported denied={false} enabled loading={false} onToggle={vi.fn()} />);
+    expect(screen.getByTestId('status-text').textContent).toContain('매일 오전 11시');
+    expect(screen.getByTestId('status-text').textContent).not.toContain('켜면');
+  });
+
+  it('denied 상태에서 브라우저 설정 안내 문구 표시', () => {
+    render(<PushToggle supported denied enabled={false} loading={false} onToggle={vi.fn()} />);
+    expect(screen.getByTestId('status-text').textContent).toContain('브라우저 설정');
+  });
+
+  it('denied 시 토글 비활성화', () => {
+    render(<PushToggle supported denied enabled={false} loading={false} onToggle={vi.fn()} />);
+    expect(screen.getByTestId('push-toggle')).toBeDisabled();
+  });
+
+  it('loading 시 토글 비활성화', () => {
+    render(<PushToggle supported denied={false} enabled loading onToggle={vi.fn()} />);
+    expect(screen.getByTestId('push-toggle')).toBeDisabled();
+  });
+
+  it('정상 상태에서 클릭 시 onToggle 호출', () => {
+    const onToggle = vi.fn();
+    render(<PushToggle supported denied={false} enabled={false} loading={false} onToggle={onToggle} />);
+    fireEvent.click(screen.getByTestId('push-toggle'));
+    expect(onToggle).toHaveBeenCalledOnce();
+  });
+
+  it('denied 시 클릭해도 onToggle 미호출', () => {
+    const onToggle = vi.fn();
+    render(<PushToggle supported denied enabled={false} loading={false} onToggle={onToggle} />);
+    fireEvent.click(screen.getByTestId('push-toggle'));
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+});

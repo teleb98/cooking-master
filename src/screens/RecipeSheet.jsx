@@ -140,7 +140,7 @@ function toDateStr(d) { return d.toISOString().slice(0, 10); }
 
 /* ── 메인 컴포넌트 ──────────────────────────────────────── */
 export default function RecipeSheet() {
-  const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion, showToast } = useApp();
+  const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion, markLocalMealChange, showToast } = useApp();
   const { user } = useAuth();
   const { family, saveProfile } = useFamily();
 
@@ -237,6 +237,7 @@ export default function RecipeSheet() {
         method: 'PUT',
         body: JSON.stringify({ plan_date: pickDate, meal_type: pickMeal, menu_name: name }),
       });
+      markLocalMealChange(`${pickDate}_${pickMeal}`);
       bumpMealVersion();
       showToast(`${MEAL_TYPES.find(m => m.key === pickMeal)?.kr}에 "${name}"이 추가됐어요`, 'success');
       setRecipe(null);
@@ -266,6 +267,7 @@ export default function RecipeSheet() {
         method: 'PUT',
         body: JSON.stringify({ plan_date: recipe.plan_date, meal_type: recipe.meal_type, menu_name: null }),
       });
+      markLocalMealChange(`${recipe.plan_date}_${recipe.meal_type}`);
       setRecipe(null);
       bumpMealVersion();
     } catch {
