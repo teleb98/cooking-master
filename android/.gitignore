@@ -1,0 +1,7 @@
+.gradle/
+app/build/
+app-release-signed.apk
+app-release-unsigned-aligned.apk
+app-release-signed.apk.idsig
+*.keystore
+local.properties
