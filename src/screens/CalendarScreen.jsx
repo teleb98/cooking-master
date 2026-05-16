@@ -67,6 +67,15 @@ function getMonthGrid(monthOffset) {
 
 const KR_MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
+function detectPartnerChange(prev, next, skipKeys) {
+  const allKeys = new Set([...Object.keys(prev), ...Object.keys(next)]);
+  for (const key of allKeys) {
+    if (skipKeys.has(key)) continue;
+    if ((prev[key]?.menu_name ?? null) !== (next[key]?.menu_name ?? null)) return true;
+  }
+  return false;
+}
+
 /* ── 메뉴 선택 시트 ─────────────────────────────────────── */
 function MealPicker({ open, onClose, onSelect, onPreview, recipes }) {
   const [search, setSearch] = useState('');
@@ -186,6 +195,11 @@ export default function CalendarScreen() {
   const weekStart = toDateStr(weekDates[0]);
   const today = new Date();
 
+  // 파트너 변경 감지용 — { viewKey, meals } 형태로 이전 fetch 결과 보관
+  const prevMealsRef    = useRef(null);
+  // 로컬에서 직접 편집한 key 집합 (폴링 후 오탐 방지)
+  const localChangedRef = useRef(new Set());
+
   // 레시피 목록 (최초 1회)
   useEffect(() => {
     apiFetch('/recipes').then(d => setRecipes(d.recipes ?? [])).catch(() => {});
@@ -200,11 +214,17 @@ export default function CalendarScreen() {
       .then(d => {
         const map = {};
         for (const m of (d.meals ?? [])) map[`${m.plan_date}_${m.meal_type}`] = m;
+        if (family.partner_connected && prevMealsRef.current?.viewKey === weekStart) {
+          if (detectPartnerChange(prevMealsRef.current.meals, map, localChangedRef.current)) {
+            showToast('파트너가 식단을 수정했어요', 'info');
+          }
+        }
+        prevMealsRef.current = { viewKey: weekStart, meals: map };
         setMeals(map);
       })
       .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
-  }, [weekStart, mealVersion, viewMode]);
+  }, [weekStart, mealVersion, viewMode]); // eslint-disable-line
 
   // 월별 식단 조회
   useEffect(() => {
@@ -214,21 +234,36 @@ export default function CalendarScreen() {
     const grid = getMonthGrid(monthOffset);
     const start = toDateStr(grid.dates[0]);
     const end   = toDateStr(grid.dates[grid.dates.length - 1]);
+    const viewKey = `month-${monthOffset}`;
     apiFetch(`/meals?start=${start}&end=${end}`)
       .then(d => {
         const map = {};
         for (const m of (d.meals ?? [])) map[`${m.plan_date}_${m.meal_type}`] = m;
+        if (family.partner_connected && prevMealsRef.current?.viewKey === viewKey) {
+          if (detectPartnerChange(prevMealsRef.current.meals, map, localChangedRef.current)) {
+            showToast('파트너가 식단을 수정했어요', 'info');
+          }
+        }
+        prevMealsRef.current = { viewKey, meals: map };
         setMeals(map);
       })
       .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
-  }, [viewMode, monthOffset, mealVersion]);
+  }, [viewMode, monthOffset, mealVersion]); // eslint-disable-line
 
   // 파트너 연결 시 30초마다 식단 자동 새로고침
   useEffect(() => {
     if (!family.partner_connected) return;
     const id = setInterval(() => bumpMealVersion(), 30_000);
     return () => clearInterval(id);
+  }, [family.partner_connected, bumpMealVersion]);
+
+  // 파트너 연결 시 포그라운드 복귀 즉시 새로고침
+  useEffect(() => {
+    if (!family.partner_connected) return;
+    const onVisible = () => { if (document.visibilityState === 'visible') bumpMealVersion(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [family.partner_connected, bumpMealVersion]);
 
   // RecipeSheet "교체" 버튼 → replaceSlot 감지해서 picker 열기
@@ -251,6 +286,9 @@ export default function CalendarScreen() {
     const { plan_date, meal_type } = picker;
     setPicker(null);
     const key = `${plan_date}_${meal_type}`;
+    // 폴링 오탐 방지: 내가 직접 바꾼 key는 2분간 변경 감지에서 제외
+    localChangedRef.current.add(key);
+    setTimeout(() => localChangedRef.current.delete(key), 2 * 60_000);
     // 낙관적 업데이트 + 레시피 즉시 표시 (await 전에 실행)
     setMeals(prev => ({
       ...prev,
@@ -315,13 +353,14 @@ export default function CalendarScreen() {
           }}>{family.initial}</div>
 
           {family.partner_connected ? (
-            /* 파트너 연결됨: 파트너 아바타 */
+            /* 파트너 연결됨: 파트너 아바타 (동기화 중엔 테두리 pulse) */
             <div style={{
               width: 34, height: 34, borderRadius: '50%',
               background: 'var(--ink-2)', color: '#fff',
               display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
-              border: '2px solid var(--bg)',
-            }} title={`${family.partner_name}님`}>
+              border: loading ? '2px solid var(--accent)' : '2px solid var(--bg)',
+              transition: 'border-color 300ms',
+            }} title={loading ? '동기화 중…' : `${family.partner_name}님`}>
               {family.partner_name?.[0] ?? '?'}
             </div>
           ) : family.type !== 'solo' ? (
