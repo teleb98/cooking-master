@@ -174,7 +174,11 @@ api/
 - [ ] **Facebook 앱 게시** — 신원 인증 완료 후 즉시
 
 ### 🟢 중기 (선택적)
-- [ ] **Android TWA 패키징** — Play Store 등록
+- [x] **Android TWA 패키징** — `android/app-release-bundle.aab` 완성, Play Store 업로드 가능
+  - keystore: `android/cookingmaster.keystore` (alias: cookingmaster, 비밀번호: 별도 보관)
+  - SHA256: `E8:78:3E:2B:CB:E6:93:30:71:34:C8:C3:67:FC:13:DD:9C:2F:68:33:2A:57:2F:6D:2D:BC:4B:09:E3:A2:82:53`
+  - assetlinks.json 배포 완료
+  - [ ] **Play Store 개발자 계정 등록** → AAB 업로드
 - [ ] **iOS PWA 래퍼** — App Store 빌드 (Capacitor 또는 PWABuilder)
 
 ---
