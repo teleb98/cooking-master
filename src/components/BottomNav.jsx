@@ -29,7 +29,7 @@ export default function BottomNav() {
         return (
           <button
             key={tab.path}
-            onClick={() => navigate(tab.path)}
+            onClick={() => navigate(tab.path, { replace: true })}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
               padding: '6px 16px',

@@ -4,6 +4,7 @@ import { MEAL_TYPES, DAYS_KR } from '../data';
 import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
 import { useAuth } from '../context/AuthContext';
+import { useBackHandler } from '../hooks/useBackHandler';
 import Icon from '../icons';
 
 const TOKEN_KEY = 'cookingMaster_token';
@@ -80,6 +81,8 @@ function detectPartnerChange(prev, next, skipKeys) {
 function MealPicker({ open, onClose, onSelect, onPreview, recipes }) {
   const [search, setSearch] = useState('');
   const inputRef = useRef(null);
+
+  useBackHandler(open, onClose);
 
   useEffect(() => {
     if (open) {

@@ -1,7 +1,10 @@
+import { useBackHandler } from '../hooks/useBackHandler';
 import Icon from '../icons';
 
 // Slide-up bottom sheet
 export function Sheet({ open, onClose, title, subtitle, children }) {
+  useBackHandler(open, onClose);
+
   return (
     <div
       onClick={onClose}
@@ -52,7 +55,9 @@ export function Sheet({ open, onClose, title, subtitle, children }) {
 }
 
 // Full-screen slide-in sheet (from right)
-export function FullSheet({ open, children }) {
+export function FullSheet({ open, onClose = () => {}, children }) {
+  useBackHandler(open, onClose);
+
   return (
     <div style={{
       position: 'fixed', inset: 0,
