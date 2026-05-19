@@ -52,6 +52,7 @@ function chainQuery(data, error = null) {
     or:     vi.fn().mockReturnThis(),
     not:    vi.fn().mockReturnThis(),
     order:  vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
     maybeSingle: vi.fn().mockResolvedValue({ data, error }),
     upsert: vi.fn().mockResolvedValue({ error: null }),
   };
@@ -76,7 +77,11 @@ function mockGeminiError(status) {
   });
 }
 
-const PROFILE = { family_type: 'couple', food_likes: [], allergies: [], shopping_day: 6 };
+const PROFILE = {
+  family_type: 'couple', food_likes: [], allergies: [], shopping_day: 6,
+  plan: 'free', ai_generate_count: 0, ai_chat_turns: 0,
+  ai_usage_month: new Date().toISOString().slice(0, 7),
+};
 const RECIPES = [
   { name: '김치찌개', kcal: 450, baby: false, tags: [] },
   { name: '된장찌개', kcal: 380, baby: false, tags: [] },

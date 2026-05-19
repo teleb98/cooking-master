@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DAYS_KR, FOOD_CHIPS, ALLERGY_CHIPS } from '../data';
 import { useApp } from '../context/AppContext';
+// apiFetch throws with status attached; 402 triggers upgrade sheet
 import { useFamily } from '../context/FamilyContext';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../icons';
@@ -199,7 +200,7 @@ function MiniCalendar({ plan, loading, accent }) {
 }
 
 export default function OnboardingScreen() {
-  const { accent, markOnboarded } = useApp();
+  const { accent, markOnboarded, showUpgrade } = useApp();
   const { saveProfile, profile } = useFamily();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -260,10 +261,16 @@ export default function OnboardingScreen() {
       setGenPlan(data.plan ?? []);
       setGenState('done');
     } catch (err) {
-      setGenErr(err.message || '식단 생성에 실패했어요.');
-      setGenState('error');
+      if (err.status === 402) {
+        setGenState('error');
+        setGenErr('이번 달 AI 식단 생성 횟수를 모두 사용했습니다.');
+        showUpgrade({ type: 'generate', isPremium: false, used: 1, limit: 1 });
+      } else {
+        setGenErr(err.message || '식단 생성에 실패했어요.');
+        setGenState('error');
+      }
     }
-  }, []);
+  }, [showUpgrade]);
 
   // generate 스텝 진입 시 자동 실행
   useEffect(() => {

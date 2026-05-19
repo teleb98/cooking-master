@@ -172,7 +172,7 @@ const hasSpeech = typeof window !== 'undefined' && !!(window.SpeechRecognition |
 
 /* ── 메인 컴포넌트 ────────────────────────────────────────────── */
 export default function ChatSheet() {
-  const { chatOpen, setChatOpen, accent, bumpMealVersion, markLocalMealChange, showToast } = useApp();
+  const { chatOpen, setChatOpen, accent, bumpMealVersion, markLocalMealChange, showToast, showUpgrade } = useApp();
   const { family } = useFamily();
   const navigate = useNavigate();
   const [input, setInput]       = useState('');
@@ -274,14 +274,21 @@ export default function ChatSheet() {
       historyRef.current = [...historyRef.current, { from: 'user', text }, { from: 'ai', text: data.text }];
     } catch (err) {
       const status = err.status ?? 0;
-      const msg = status === 429
-        ? 'AI 요청이 너무 많습니다. 1분 후 다시 시도해주세요.'
-        : status === 503
-        ? 'AI 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해주세요.'
-        : err.message || '죄송해요, 일시적인 오류입니다. 잠시 후 다시 시도해주세요.';
-      setMessages(prev => prev.filter(m => m.kind !== 'thinking').concat([
-        { from: 'ai', kind: 'text', text: msg },
-      ]));
+      if (status === 402) {
+        showUpgrade({ type: 'chat', isPremium: false, used: 5, limit: 5 });
+        setMessages(prev => prev.filter(m => m.kind !== 'thinking').concat([
+          { from: 'ai', kind: 'text', text: '이번 달 AI 채팅 횟수를 모두 사용했습니다. 프리미엄 플랜에서 월 30턴을 이용할 수 있어요.' },
+        ]));
+      } else {
+        const msg = status === 429
+          ? 'AI 요청이 너무 많습니다. 1분 후 다시 시도해주세요.'
+          : status === 503
+          ? 'AI 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해주세요.'
+          : err.message || '죄송해요, 일시적인 오류입니다. 잠시 후 다시 시도해주세요.';
+        setMessages(prev => prev.filter(m => m.kind !== 'thinking').concat([
+          { from: 'ai', kind: 'text', text: msg },
+        ]));
+      }
     } finally {
       setSending(false);
     }

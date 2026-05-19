@@ -23,6 +23,9 @@ export function AppProvider({ children }) {
   const toastTimer = useRef(null);
   // onboarded: React state so route re-renders reactively when flag is set
   const [onboarded, setOnboarded] = useState(() => !!localStorage.getItem(ONBOARD_KEY));
+  // upgrade sheet
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeInfo, setUpgradeInfo] = useState(null);
 
   const setAccent = useCallback((v) => {
     setAccentState(v);
@@ -50,6 +53,11 @@ export function AppProvider({ children }) {
     toastTimer.current = setTimeout(() => setToast(null), 3000);
   }, []);
 
+  const showUpgrade = useCallback((info = null) => {
+    setUpgradeInfo(info);
+    setUpgradeOpen(true);
+  }, []);
+
   const markOnboarded = useCallback(() => {
     localStorage.setItem(ONBOARD_KEY, '1');
     setOnboarded(true);
@@ -61,7 +69,7 @@ export function AppProvider({ children }) {
   }, []);
 
   return (
-    <AppContext.Provider value={{ accent, setAccent, theme, setTheme, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, localMealChangesRef, markLocalMealChange, toast, showToast, onboarded, markOnboarded, clearOnboarded, favoritesOpen, setFavoritesOpen, favoriteSeed, setFavoriteSeed }}>
+    <AppContext.Provider value={{ accent, setAccent, theme, setTheme, chatOpen, setChatOpen, recipe, setRecipe, replaceSlot, setReplaceSlot, mealVersion, bumpMealVersion, localMealChangesRef, markLocalMealChange, toast, showToast, onboarded, markOnboarded, clearOnboarded, favoritesOpen, setFavoritesOpen, favoriteSeed, setFavoriteSeed, upgradeOpen, setUpgradeOpen, upgradeInfo, showUpgrade }}>
       {children}
     </AppContext.Provider>
   );

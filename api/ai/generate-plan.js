@@ -1,5 +1,6 @@
 import { db } from '../_db.js';
 import { verifyToken } from '../_auth.js';
+import { checkAiLimit, incrementAiUsage } from '../_limits.js';
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -31,6 +32,19 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(503).json({ error: 'AI 서비스가 설정되지 않았습니다.' });
+
+  const limitCheck = await checkAiLimit(db.supabase, userId, 'generate');
+  if (!limitCheck.allowed) {
+    return res.status(402).json({
+      error: limitCheck.isPremium
+        ? '이번 달 AI 식단 생성 횟수를 모두 사용했습니다. (월 4회)'
+        : 'AI 식단 생성은 월 1회 무료 체험이 제공됩니다. 이번 달 무료 체험을 이미 사용하셨습니다.',
+      code: limitCheck.reason,
+      used: limitCheck.used,
+      limit: limitCheck.limit,
+      isPremium: limitCheck.isPremium,
+    });
+  }
 
   try {
     const [profileRes] = await Promise.all([
@@ -181,6 +195,7 @@ JSON 형식으로만 응답 (설명 없이):
       return res.status(500).json({ error: '식단 저장에 실패했습니다.' });
     }
 
+    await incrementAiUsage(db.supabase, userId, 'generate');
     return res.json({ plan: validPlan, count: validPlan.length });
   } catch (err) {
     console.error('[generate-plan] unexpected error:', err.message);

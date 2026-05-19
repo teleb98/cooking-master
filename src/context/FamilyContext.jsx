@@ -57,10 +57,11 @@ export function FamilyProvider({ children }) {
   const [profile, setProfile] = useState(loadLocal);
   const [members, setMembers] = useState([]);
   const [vapidPublicKey, setVapidPublicKey] = useState(null);
+  const [planInfo, setPlanInfo] = useState(null);
 
   const loadProfile = useCallback(async () => {
     try {
-      const { profile: srv, members: srvMembers, vapidPublicKey: key } = await apiFetch('/user/profile');
+      const { profile: srv, members: srvMembers, vapidPublicKey: key, planInfo: pi } = await apiFetch('/user/profile');
       if (srv && Object.keys(srv).length > 1) {
         const merged = { ...DEFAULTS, ...srv };
         setProfile(merged);
@@ -69,6 +70,7 @@ export function FamilyProvider({ children }) {
       }
       setMembers(srvMembers ?? []);
       if (key) setVapidPublicKey(key);
+      if (pi) setPlanInfo(pi);
     } catch {}
   }, []);
 
@@ -121,7 +123,7 @@ export function FamilyProvider({ children }) {
   };
 
   return (
-    <FamilyContext.Provider value={{ profile, family, members, saveProfile, loadProfile, vapidPublicKey }}>
+    <FamilyContext.Provider value={{ profile, family, members, saveProfile, loadProfile, vapidPublicKey, planInfo }}>
       {children}
     </FamilyContext.Provider>
   );

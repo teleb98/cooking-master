@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
+
+const PLAN_LIMITS = { free: { generate: 1, chat: 5 }, premium: { generate: 4, chat: 30 } };
 import { FOOD_CHIPS, ALLERGY_CHIPS } from '../data';
 import Icon from '../icons';
 
@@ -381,9 +383,9 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
 
 /* ── 메인 컴포넌트 ────────────────────────────────────────── */
 export default function ProfileScreen() {
-  const { accent, setAccent, theme, setTheme, showToast } = useApp();
+  const { accent, setAccent, theme, setTheme, showToast, showUpgrade } = useApp();
   const { user, logout } = useAuth();
-  const { family, profile, members, saveProfile, vapidPublicKey } = useFamily();
+  const { family, profile, members, saveProfile, vapidPublicKey, planInfo } = useFamily();
   const navigate = useNavigate();
 
   const [editOpen,     setEditOpen]     = useState(false);
@@ -560,6 +562,71 @@ export default function ProfileScreen() {
           </button>
         </div>
       )}
+
+      {/* 내 플랜 카드 */}
+      {planInfo && (() => {
+        const plan = planInfo.plan ?? 'free';
+        const isPremium = plan === 'premium';
+        const genLimit  = PLAN_LIMITS[plan].generate;
+        const chatLimit = PLAN_LIMITS[plan].chat;
+        const genUsed   = planInfo.ai_generate_count ?? 0;
+        const chatUsed  = planInfo.ai_chat_turns ?? 0;
+        const month     = planInfo.ai_usage_month || '';
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const sameMonth = month === currentMonth;
+        const displayGenUsed  = sameMonth ? genUsed  : 0;
+        const displayChatUsed = sameMonth ? chatUsed : 0;
+
+        return (
+          <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div className="kr-en">PLAN · 내 플랜</div>
+              <span style={{
+                fontSize: 10, padding: '3px 10px', borderRadius: 6, fontWeight: 800,
+                background: isPremium ? `${accent}22` : 'var(--bg-2)',
+                color: isPremium ? accent : 'var(--ink-3)',
+              }}>
+                {isPremium ? 'PREMIUM' : 'FREE'}
+              </span>
+            </div>
+
+            {/* 사용량 바 */}
+            {[
+              { label: 'AI 식단 생성', used: displayGenUsed, limit: genLimit, type: 'generate' },
+              { label: 'AI 채팅',      used: displayChatUsed, limit: chatLimit, type: 'chat' },
+            ].map(item => (
+              <div key={item.type} style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                  <span style={{ color: 'var(--ink-2)' }}>{item.label}</span>
+                  <span style={{ fontWeight: 700, color: item.used >= item.limit ? '#C0392B' : 'var(--ink-3)' }}>
+                    {item.used} / {item.limit}회
+                  </span>
+                </div>
+                <div style={{ height: 5, background: 'var(--line-soft)', borderRadius: 999, overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.min(100, (item.used / item.limit) * 100)}%`,
+                    background: item.used >= item.limit ? '#C0392B' : accent,
+                    borderRadius: 999,
+                  }} />
+                </div>
+              </div>
+            ))}
+
+            <button
+              onClick={() => showUpgrade({ type: 'generate', isPremium, used: displayGenUsed, limit: genLimit })}
+              style={{
+                marginTop: 4, width: '100%', padding: '11px 0', borderRadius: 10,
+                border: `1px solid ${accent}55`, background: `${accent}10`,
+                fontSize: 13, fontWeight: 700, color: accent,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              플랜 안내 보기
+            </button>
+          </div>
+        );
+      })()}
 
       {/* 가족 카드 */}
       <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>

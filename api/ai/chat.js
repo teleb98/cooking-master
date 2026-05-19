@@ -1,5 +1,6 @@
 import { db } from '../_db.js';
 import { verifyToken } from '../_auth.js';
+import { checkAiLimit, incrementAiUsage } from '../_limits.js';
 
 // gemini-2.5-flash: latest stable flash model, confirmed working
 const GEMINI_MODEL = 'gemini-2.5-flash';
@@ -71,6 +72,19 @@ export default async function handler(req, res) {
   }
 
   if (!message?.trim()) return res.status(400).json({ error: 'message required' });
+
+  const limitCheck = await checkAiLimit(db.supabase, userId, 'chat');
+  if (!limitCheck.allowed) {
+    return res.status(402).json({
+      error: limitCheck.isPremium
+        ? '이번 달 AI 채팅 횟수를 모두 사용했습니다. (월 30턴)'
+        : 'AI 채팅은 월 5턴 무료 체험이 제공됩니다. 이번 달 무료 체험을 모두 사용하셨습니다.',
+      code: limitCheck.reason,
+      used: limitCheck.used,
+      limit: limitCheck.limit,
+      isPremium: limitCheck.isPremium,
+    });
+  }
 
   try {
     const week1   = getMonday(0);
@@ -240,6 +254,7 @@ ${recipeList}
       try { changes = JSON.parse(jsonMatch[1]).changes ?? null; } catch { /* ignore */ }
     }
 
+    await incrementAiUsage(db.supabase, userId, 'chat');
     const displayText = text.replace(/```json[\s\S]*?```/g, '').trim();
     return res.json({ text: displayText, changes });
 

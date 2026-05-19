@@ -141,7 +141,15 @@ export default async function handler(req, res) {
       ]);
       if (!userRow) return res.status(401).json({ error: 'User not found' });
       const members = await getFamilyMembers(profile?.family_group_id);
-      return res.json({ user: toPublicUser(userRow, fmt), profile: profile ?? {}, members, vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null });
+      const p = profile ?? {};
+      const planInfo = {
+        plan: p.plan ?? 'free',
+        plan_expires_at: p.plan_expires_at ?? null,
+        ai_generate_count: p.ai_generate_count ?? 0,
+        ai_chat_turns: p.ai_chat_turns ?? 0,
+        ai_usage_month: p.ai_usage_month ?? '',
+      };
+      return res.json({ user: toPublicUser(userRow, fmt), profile: p, members, vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null, planInfo });
     }
 
     if (req.method === 'PUT') {
