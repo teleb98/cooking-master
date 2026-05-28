@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DAYS_KR, FOOD_CHIPS, ALLERGY_CHIPS } from '../data';
 import { useApp } from '../context/AppContext';
 // apiFetch throws with status attached; 402 triggers upgrade sheet
-import { useFamily } from '../context/FamilyContext';
+import { useFamily, getChildCategory } from '../context/FamilyContext';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../icons';
 
@@ -215,11 +215,20 @@ export default function OnboardingScreen() {
   const [step, setStep]               = useState(0);
   const [type, setType]               = useState(profile.family_type ?? 'couple');
   const [partnerName, setPartnerName] = useState(profile.partner_name ?? '');
-  const [babyName, setBabyName]       = useState(profile.baby_name ?? '');
   const [shopday, setShopday]         = useState(profile.shopping_day ?? 6);
-  const [bday, setBday]               = useState(profile.baby_birthday ?? defaultBday);
   const [saving, setSaving]           = useState(false);
   const [errMsg, setErrMsg]           = useState('');
+
+  /* ── 자녀 배열 — 기존 단일 아기 데이터 마이그레이션 ── */
+  const initChildren = () => {
+    if (Array.isArray(profile.children) && profile.children.length > 0) return profile.children;
+    if (profile.baby_birthday) return [{ id: 'c0', name: profile.baby_name ?? '', birthday: profile.baby_birthday }];
+    return [{ id: 'c0', name: '', birthday: defaultBday }];
+  };
+  const [children, setChildren] = useState(initChildren);
+  const addChild    = () => setChildren(p => [...p, { id: `c${Date.now()}`, name: '', birthday: defaultBday }]);
+  const removeChild = (id) => setChildren(p => p.filter(c => c.id !== id));
+  const updateChild = (id, field, val) => setChildren(p => p.map(c => c.id === id ? { ...c, [field]: val } : c));
 
   /* ── 취향 설문 상태 ── */
   const [likes, setLikes]   = useState(new Set(profile.food_likes ?? []));
@@ -239,7 +248,7 @@ export default function OnboardingScreen() {
     const s = [{ key: 'preferences', label: '취향 설문' }];
     s.push({ key: 'type', label: '사용 유형' });
     if (type === 'couple' || type === 'family') s.push({ key: 'members', label: '가족 이름' });
-    if (type === 'family') s.push({ key: 'baby', label: '아기 정보' });
+    if (type === 'family') s.push({ key: 'baby', label: '자녀 정보' });
     s.push({ key: 'shopday', label: '장보는 요일' });
     s.push({ key: 'generate', label: '식단 생성' });
     return s;
@@ -248,7 +257,6 @@ export default function OnboardingScreen() {
   const totalSteps = steps.length;
   const currentKey = steps[step]?.key ?? 'generate';
   const isLast     = step === totalSteps - 1;
-  const baby       = calcBaby(bday);
   const myName     = user?.name ?? '';
 
   /* ── 식단 생성 트리거 ── */
@@ -287,11 +295,16 @@ export default function OnboardingScreen() {
     if (currentKey === 'shopday') {
       setSaving(true);
       try {
+        const validChildren = type === 'family'
+          ? children.filter(c => c.birthday).map(c => ({ id: c.id, name: c.name, birthday: c.birthday }))
+          : [];
+        const firstBaby = validChildren.find(c => getChildCategory(c.birthday).isBaby);
         await saveProfile({
           family_type:   type,
           partner_name:  (type === 'couple' || type === 'family') ? (partnerName.trim() || null) : null,
-          baby_birthday: type === 'family' ? bday : null,
-          baby_name:     type === 'family' ? (babyName.trim() || null) : null,
+          children:      validChildren,
+          baby_birthday: firstBaby?.birthday ?? null,
+          baby_name:     firstBaby?.name ?? null,
           shopping_day:  shopday,
           food_likes:    Array.from(likes),
           allergies:     Array.from(avoids),
@@ -521,52 +534,65 @@ export default function OnboardingScreen() {
           </div>
         )}
 
-        {/* ── STEP: 아기 정보 ── */}
+        {/* ── STEP: 자녀 정보 (다자녀 지원) ── */}
         {currentKey === 'baby' && (
           <div>
-            <Hero kr="아기 정보를 입력하세요" en="Tell us about your baby" sub="이유식 단계가 자동 계산되어 식단에 분기됩니다." />
-            <div style={{ marginTop: 18, padding: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14 }}>
-              <NameInput
-                labelEn="BABY NAME · 아기 이름"
-                value={babyName}
-                onChange={setBabyName}
-                placeholder="이름 입력 (선택)"
-              />
-              <div style={{ marginTop: 18 }}>
-                <div className="kr-en">BIRTHDAY · 생년월일</div>
-                <input
-                  type="date"
-                  value={bday}
-                  onChange={e => setBday(e.target.value)}
+            <Hero kr="자녀 정보를 입력하세요" en="Tell us about your children" sub="이유식·유아 단계가 자동 계산되어 식단에 분기됩니다." />
+            <div style={{ marginTop: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {children.map((child, idx) => {
+                const cat = child.birthday ? getChildCategory(child.birthday) : null;
+                return (
+                  <div key={child.id} style={{ padding: 16, background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>자녀 {idx + 1}</span>
+                      {children.length > 1 && (
+                        <button onClick={() => removeChild(child.id)} style={{ color: 'var(--ink-4)', fontSize: 12 }}>삭제</button>
+                      )}
+                    </div>
+                    <NameInput
+                      labelEn="NAME · 이름"
+                      value={child.name}
+                      onChange={v => updateChild(child.id, 'name', v)}
+                      placeholder="이름 입력 (선택)"
+                    />
+                    <div style={{ marginTop: 14 }}>
+                      <div className="kr-en">BIRTHDAY · 생년월일</div>
+                      <input
+                        type="date"
+                        value={child.birthday}
+                        onChange={e => updateChild(child.id, 'birthday', e.target.value)}
+                        style={{
+                          marginTop: 6, width: '100%', padding: '12px 14px', borderRadius: 10,
+                          border: '1px solid var(--line)', background: 'var(--bg)',
+                          fontSize: 16, fontFamily: 'var(--font-mono)', color: 'var(--ink)', outline: 'none',
+                        }}
+                      />
+                    </div>
+                    {cat && (
+                      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg)', borderRadius: 10 }}>
+                        <span style={{ fontSize: 20 }}>{cat.icon}</span>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{cat.label}</div>
+                          {cat.isBaby && (
+                            <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>이유식 분기 식단이 자동 적용됩니다</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {children.length < 4 && (
+                <button
+                  onClick={addChild}
                   style={{
-                    marginTop: 6, width: '100%', padding: '12px 14px', borderRadius: 10,
-                    border: '1px solid var(--line)', background: 'var(--bg)',
-                    fontSize: 16, fontFamily: 'var(--font-mono)', color: 'var(--ink)', outline: 'none',
+                    padding: '13px 0', borderRadius: 12,
+                    border: '1.5px dashed var(--line)', background: 'transparent',
+                    color: 'var(--ink-3)', fontSize: 13, fontWeight: 600,
                   }}
-                />
-              </div>
-              {baby && (
-                <>
-                  <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--baby-soft)', color: 'var(--baby-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      {Icon.baby(22)}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{baby.months}개월 · {baby.stage} ({baby.en})</div>
-                      <div className="kr-en" style={{ marginTop: 2 }}>{baby.hint}</div>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, background: 'var(--bg)', padding: 4, borderRadius: 10 }}>
-                    {['초기', '중기', '후기', '완료기'].map((s, i) => (
-                      <div key={s} style={{
-                        padding: '9px 0', textAlign: 'center', borderRadius: 7,
-                        background: i === baby.idx ? accent : 'transparent',
-                        color: i === baby.idx ? '#fff' : 'var(--ink-3)',
-                        fontSize: 11, fontWeight: 600, transition: 'background 200ms',
-                      }}>{s}</div>
-                    ))}
-                  </div>
-                </>
+                >
+                  + 자녀 추가
+                </button>
               )}
             </div>
           </div>
@@ -621,11 +647,38 @@ export default function OnboardingScreen() {
                                         'Generation failed'
               }
               sub={
-                genState === 'done'   ? `총 ${genPlan.length}개 식단 · 마음에 들지 않으면 재생성하세요` :
-                genState === 'error'  ? genErr :
-                                       '취향 정보를 바탕으로 Gemini AI가 메뉴를 선정합니다'
+                genState === 'done'  ? `총 ${genPlan.length}개 식단이 준비됐어요` :
+                genState === 'error' ? genErr :
+                                      '취향 정보를 바탕으로 Gemini AI가 메뉴를 선정합니다'
               }
             />
+
+            {/* 생성 완료 시 확정 버튼을 콘텐츠 상단에 노출 — 스크롤 없이 항상 보임 */}
+            {genState === 'done' && (
+              <button
+                onClick={next}
+                style={{
+                  marginTop: 18, width: '100%', padding: '15px 0', borderRadius: 14,
+                  background: accent, color: '#fff',
+                  fontSize: 15, fontWeight: 700,
+                  boxShadow: `0 6px 18px ${accent}4D`,
+                }}
+              >
+                확정하고 시작하기 →
+              </button>
+            )}
+
+            {genState === 'loading' && (
+              <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="var(--line)" strokeWidth="2.5"/>
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke={accent} strokeWidth="2.5" strokeLinecap="round">
+                    <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
+                  </path>
+                </svg>
+                <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>AI가 맞춤 식단을 구성하는 중…</span>
+              </div>
+            )}
 
             {genState !== 'error' && (
               <MiniCalendar
@@ -647,12 +700,12 @@ export default function OnboardingScreen() {
               <button
                 onClick={() => { setGenState('idle'); }}
                 style={{
-                  marginTop: 14, width: '100%', padding: '12px 0', borderRadius: 12,
-                  border: `1px solid ${accent}`, background: 'transparent',
-                  color: accent, fontSize: 13, fontWeight: 700,
+                  marginTop: 12, width: '100%', padding: '11px 0', borderRadius: 12,
+                  border: '1px solid var(--line)', background: 'transparent',
+                  color: 'var(--ink-3)', fontSize: 13, fontWeight: 500,
                 }}
               >
-                재생성
+                마음에 안 들어요 · 재생성
               </button>
             )}
           </div>
@@ -666,27 +719,29 @@ export default function OnboardingScreen() {
         </div>
       )}
 
-      {/* CTA 버튼 */}
-      <div style={{ padding: '12px 18px', paddingBottom: 'calc(18px + env(safe-area-inset-bottom, 0px))' }}>
-        <button onClick={next} disabled={ctaDisabled} style={{
-          width: '100%', padding: '15px 0', borderRadius: 14,
-          background: ctaDisabled ? 'var(--ink-4)' : accent,
-          color: '#fff', fontSize: 15, fontWeight: 700,
-          boxShadow: ctaDisabled ? 'none' : `0 6px 18px ${accent}4D`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          transition: 'background 150ms',
-        }}>
-          {genState === 'loading' && (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
-              <path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
-                <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite"/>
-              </path>
-            </svg>
-          )}
-          {ctaLabel()}
-        </button>
-      </div>
+      {/* CTA 버튼 — generate/done 스텝은 콘텐츠 내부 버튼이 담당하므로 숨김 */}
+      {!(currentKey === 'generate' && genState === 'done') && (
+        <div style={{ padding: '12px 18px', paddingBottom: 'calc(18px + env(safe-area-inset-bottom, 0px))' }}>
+          <button onClick={next} disabled={ctaDisabled} style={{
+            width: '100%', padding: '15px 0', borderRadius: 14,
+            background: ctaDisabled ? 'var(--ink-4)' : accent,
+            color: '#fff', fontSize: 15, fontWeight: 700,
+            boxShadow: ctaDisabled ? 'none' : `0 6px 18px ${accent}4D`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            transition: 'background 150ms',
+          }}>
+            {genState === 'loading' && (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.4)" strokeWidth="2.5"/>
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                  <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.7s" repeatCount="indefinite"/>
+                </path>
+              </svg>
+            )}
+            {ctaLabel()}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
