@@ -64,7 +64,35 @@ export default async function handler(req, res) {
     const familyType = profile.family_type ?? 'couple';
     const foodLikes  = Array.isArray(profile.food_likes) ? profile.food_likes : [];
     const allergies  = Array.isArray(profile.allergies)  ? profile.allergies  : [];
-    const hasBaby    = !!profile.baby_birthday;
+
+    // 자녀 배열 — 새 children 필드 우선, 기존 baby 데이터 폴백
+    const rawChildren = Array.isArray(profile.children) && profile.children.length > 0
+      ? profile.children
+      : (profile.baby_birthday ? [{ name: profile.baby_name, birthday: profile.baby_birthday }] : []);
+
+    function childMonths(bday) {
+      return Math.floor((Date.now() - new Date(bday)) / (1000 * 60 * 60 * 24 * 30.44));
+    }
+    function childLabel(bday) {
+      const m = childMonths(bday);
+      if (m < 6)   return `이유식 초기(${m}개월)`;
+      if (m < 9)   return `이유식 중기(${m}개월)`;
+      if (m < 12)  return `이유식 후기(${m}개월)`;
+      if (m < 24)  return `이유식 완료기(${m}개월)`;
+      if (m < 72)  return `유아 ${Math.floor(m/12)}세`;
+      if (m < 156) return `어린이 ${Math.floor(m/12)}세`;
+      if (m < 216) return `청소년 ${Math.floor(m/12)}세`;
+      return `성인 ${Math.floor(m/12)}세`;
+    }
+
+    const hasBaby  = rawChildren.some(c => c.birthday && childMonths(c.birthday) < 24);
+    const hasChild = rawChildren.some(c => c.birthday && childMonths(c.birthday) >= 24 && childMonths(c.birthday) < 156);
+    const hasTeen  = rawChildren.some(c => c.birthday && childMonths(c.birthday) >= 156 && childMonths(c.birthday) < 216);
+
+    const childrenDesc = rawChildren
+      .filter(c => c.birthday)
+      .map(c => `${c.name ? c.name + ' ' : ''}(${childLabel(c.birthday)})`)
+      .join(', ');
 
     // 2주 날짜 (14일)
     const week1Start = getMondayOf(0);
@@ -90,28 +118,41 @@ export default async function handler(req, res) {
 
     const userPrompt = `다음 조건으로 ${dates[0]}부터 ${dates[13]}까지 2주 식단을 생성하세요.
 
-사용자 정보:
-- 가족 유형: ${FAMILY_DESC[familyType] ?? familyType}
+## 중요: 각 레시피는 완전한 한 끼 식사 기준 칼로리입니다
+- 한식 메뉴: 밥 1공기(300kcal) + 국·찌개 + 메인 반찬 + 기본 반찬 포함
+- 양식/건강식 메뉴: 탄수화물 대체(파스타·빵·오트밀 등) + 단백질 + 채소 포함
+- 칼로리 목표: 아침 350~500kcal, 점심 550~750kcal, 저녁 550~750kcal (하루 합계 1,700~1,900kcal)
+
+## 사용자 정보
+- 가족 유형: ${FAMILY_DESC[familyType] ?? familyType}${rawChildren.length > 0 ? ` + 자녀 ${rawChildren.filter(c=>c.birthday).length}명` : ''}
+${childrenDesc ? `- 자녀 구성: ${childrenDesc}` : ''}
 ${likedMenusLine}
 ${likedHintsLine}
 ${noPrefsLine}
 - 알레르기·피해야 할 재료: ${allergyText}
-${hasBaby ? '- 영·유아 포함 가족: 이유식 가능 표시 메뉴 우선 고려' : ''}
+${hasBaby  ? '- 이유식기 영아 포함: 이유식 가능(이유식가능) 메뉴 적극 포함, 자극적 양념 최소화' : ''}
+${hasChild ? '- 어린이 포함: 매운 음식 최소화, 영양 균형 강조 (칼슘·철분 풍부 식품 포함)' : ''}
+${hasTeen  ? '- 청소년 포함: 성장기 단백질·칼슘 충분히 (육류·생선·유제품·콩류 강화)' : ''}
 
-사용 가능한 레시피 (이 목록에서만 선택, 메뉴명 정확히 일치):
+## 사용 가능한 레시피 (이 목록에서만 선택, 메뉴명 정확히 일치)
 ${recipeList}
 
-규칙:
+## 식단 구성 규칙
 1. 반드시 위 레시피 목록에 있는 메뉴명 그대로 사용
 2. 알레르기 재료 포함 메뉴는 절대 포함 금지
-3. 즐겨찾는 메뉴가 있으면 2주 내 각 메뉴를 최소 1회 이상 배치하고, 선호도가 높은 메뉴는 더 자주 반영
-4. 선호 재료가 포함된 메뉴를 다른 메뉴보다 우선 배치
-5. 같은 메뉴를 3일 이상 연속 배치 금지
-6. 아침은 비교적 간단한 메뉴 위주
-7. 14일 × 아침·점심·저녁 = 총 42개 항목 전부 포함
+3. 즐겨찾는 메뉴가 있으면 2주 내 각 메뉴 최소 1회 이상 배치
+4. 같은 메뉴를 3일 이상 연속 배치 금지
+5. 아침은 350~500kcal 이하 간편식 위주 (오트밀·토스트·요거트 등)
+
+## 건강 식단 필수 규칙
+6. 단백질 공급: 육류·생선·두부·달걀 중 하루 최소 2가지 단백질 공급원 포함
+7. 채소 다양성: 주 3회 이상 녹황색 채소(시금치·브로콜리·당근 등) 포함 메뉴 배치
+8. 영양 균형: 같은 날 아침·점심·저녁이 모두 고칼로리 고지방 메뉴가 되지 않도록 조절
+9. 주간 패턴: 1주 내 생선 2회, 콩류(두부 포함) 2회, 채소 위주 메뉴 1회 이상 포함
+10. 14일 × 아침·점심·저녁 = 총 42개 항목 전부 포함
 
 JSON 형식으로만 응답 (설명 없이):
-{"plan":[{"plan_date":"YYYY-MM-DD","meal_type":"breakfast","menu_name":"메뉴명"},...]}`;;
+{"plan":[{"plan_date":"YYYY-MM-DD","meal_type":"breakfast","menu_name":"메뉴명"},...]}`;
 
     const geminiRes = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: 'POST',

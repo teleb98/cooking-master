@@ -10,6 +10,7 @@ const DEFAULTS = {
   family_type:     'couple',
   baby_birthday:   null,
   baby_name:       null,
+  children:        [],
   shopping_day:    6,
   partner_name:    null,
   food_likes:      [],
@@ -36,6 +37,18 @@ function babyStage(months) {
   if (months <  9) return { stage: '중기', en: 'mid-stage'   };
   if (months < 12) return { stage: '후기', en: 'late-stage'  };
   return               { stage: '완료기', en: 'complete'     };
+}
+
+export function getChildCategory(birthday) {
+  const m = monthsOld(birthday);
+  if (m <  6)  return { label: '이유식 초기',           icon: '🍼', color: '#FF9B83', isBaby: true,  stage: '초기',   months: m };
+  if (m <  9)  return { label: '이유식 중기',           icon: '🍼', color: '#FF9B83', isBaby: true,  stage: '중기',   months: m };
+  if (m < 12)  return { label: '이유식 후기',           icon: '🍼', color: '#FF9B83', isBaby: true,  stage: '후기',   months: m };
+  if (m < 24)  return { label: '이유식 완료기',         icon: '🥣', color: '#FFB347', isBaby: true,  stage: '완료기', months: m };
+  if (m < 72)  return { label: `유아 (${Math.floor(m/12)}세)`,   icon: '🧒', color: '#6AB49A', isBaby: false, months: m };
+  if (m < 156) return { label: `어린이 (${Math.floor(m/12)}세)`, icon: '👦', color: '#5B9EC9', isBaby: false, months: m };
+  if (m < 216) return { label: `청소년 (${Math.floor(m/12)}세)`, icon: '🧑', color: '#9B8EC4', isBaby: false, months: m };
+  return             { label: `성인 (${Math.floor(m/12)}세)`,   icon: '👤', color: '#888888', isBaby: false, months: m };
 }
 
 async function apiFetch(path, opts = {}) {
@@ -98,8 +111,20 @@ export function FamilyProvider({ children }) {
     return next;
   }, [profile]);
 
-  const months = monthsOld(profile.baby_birthday);
-  const { stage, en: stage_en } = babyStage(months);
+  // children: 새 children 배열 우선, 없으면 기존 baby 데이터로 폴백
+  const rawChildren = Array.isArray(profile.children) && profile.children.length > 0
+    ? profile.children
+    : (profile.baby_birthday
+        ? [{ id: 'legacy', name: profile.baby_name ?? '', birthday: profile.baby_birthday }]
+        : []);
+
+  const processedChildren = rawChildren
+    .filter(c => c.birthday)
+    .map(c => ({ ...c, ...getChildCategory(c.birthday) }));
+
+  const babyChildren = processedChildren.filter(c => c.isBaby);
+  const firstBaby    = babyChildren[0] ?? null;
+  const { stage, en: stage_en } = firstBaby ? babyStage(firstBaby.months) : { stage: '', en: '' };
 
   // 연결된 파트너 멤버 (active 상태의 partner role)
   const activePartner = members.find(m => m.role === 'partner' && m.status === 'active');
@@ -108,11 +133,12 @@ export function FamilyProvider({ children }) {
     name:              user?.name ?? '우리 가족',
     initial:           (user?.name ?? '가')[0],
     type:              profile.family_type,
-    has_baby:          !!profile.baby_birthday,
-    baby_name:         profile.baby_name ?? null,
-    baby_months:       months,
+    has_baby:          babyChildren.length > 0,
+    baby_name:         firstBaby?.name ?? null,
+    baby_months:       firstBaby?.months ?? 0,
     baby_stage:        stage,
     baby_stage_en:     stage_en,
+    children:          processedChildren,
     shopping_day:      profile.shopping_day,
     shopping_day_kr:   DAYS_KR[profile.shopping_day] ?? '일',
     partner_name:      activePartner?.name ?? profile.partner_name,

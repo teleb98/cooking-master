@@ -1,11 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-// Prefer service_role key (bypasses RLS); fall back to anon key if not configured yet
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.SUPABASE_ANON_KEY ??
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Service role key required — bypasses RLS and has full DB access.
+// Never fall back to anon key: anon key + no RLS = full public access.
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseKey) throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is required');
 
 const supabase = createClient(supabaseUrl, supabaseKey, {
   auth: { persistSession: false, autoRefreshToken: false },

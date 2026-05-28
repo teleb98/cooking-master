@@ -115,6 +115,29 @@ export default async function handler(req, res) {
     /* 커스텀 레시피 생성 */
     if (create) {
       try {
+        // 플랜에 따른 커스텀 레시피 수 제한 (free: 5개)
+        const { data: profile } = await db.supabase
+          .from('user_profiles')
+          .select('plan, plan_expires_at, is_admin, is_test')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const isPremiumOrAbove = profile?.is_admin || profile?.is_test ||
+          (profile?.plan === 'premium' && (!profile.plan_expires_at || new Date(profile.plan_expires_at) > new Date()));
+
+        if (!isPremiumOrAbove) {
+          const { count } = await db.supabase
+            .from('recipes')
+            .select('id', { count: 'exact', head: true })
+            .eq('user_id', userId);
+          if ((count ?? 0) >= 5) {
+            return res.status(402).json({
+              error: '무료 플랜에서는 커스텀 레시피를 최대 5개까지 추가할 수 있습니다.',
+              code: 'recipe_limit',
+            });
+          }
+        }
+
         const { data, error } = await db.supabase.from('recipes').insert({
           name,
           kcal:        kcal ? Number(kcal) : null,

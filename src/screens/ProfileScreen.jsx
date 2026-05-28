@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { useFamily } from '../context/FamilyContext';
+import { useFamily, getChildCategory } from '../context/FamilyContext';
 
 const PLAN_LIMITS = { free: { generate: 1, chat: 5 }, premium: { generate: 4, chat: 30 } };
 import { FOOD_CHIPS, ALLERGY_CHIPS } from '../data';
@@ -192,38 +192,58 @@ function DeleteAccountSheet({ open, onClose, onConfirm }) {
 }
 
 /* ── 가족 설정 편집 시트 ──────────────────────────────────── */
+function newChild() {
+  return { id: `c_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, name: '', birthday: '' };
+}
+
 function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
   const [type, setType]           = useState(profile.family_type ?? 'couple');
   const [partnerName, setPartner] = useState(profile.partner_name ?? '');
-  const [babyName, setBabyName]   = useState(profile.baby_name ?? '');
-  const [babyBday, setBabyBday]   = useState(profile.baby_birthday ?? '');
   const [shopday, setShopday]     = useState(profile.shopping_day ?? 6);
   const [likes, setLikes]         = useState(new Set(profile.food_likes ?? []));
   const [avoids, setAvoids]       = useState(new Set(profile.allergies  ?? []));
   const [saving, setSaving]       = useState(false);
 
+  // 자녀 배열 — 기존 baby 데이터 마이그레이션
+  const initChildren = () => {
+    if (Array.isArray(profile.children) && profile.children.length > 0) return profile.children;
+    if (profile.baby_birthday) return [{ id: 'legacy', name: profile.baby_name ?? '', birthday: profile.baby_birthday }];
+    return [];
+  };
+  const [children, setChildren] = useState(initChildren);
+
   useEffect(() => {
     if (open) {
       setType(profile.family_type ?? 'couple');
       setPartner(profile.partner_name ?? '');
-      setBabyName(profile.baby_name ?? '');
-      setBabyBday(profile.baby_birthday ?? '');
       setShopday(profile.shopping_day ?? 6);
       setLikes(new Set(profile.food_likes ?? []));
       setAvoids(new Set(profile.allergies  ?? []));
+      setChildren(initChildren());
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, profile]);
+
+  const addChild    = () => setChildren(prev => [...prev, newChild()]);
+  const removeChild = (id) => setChildren(prev => prev.filter(c => c.id !== id));
+  const updateChild = (id, field, val) =>
+    setChildren(prev => prev.map(c => c.id === id ? { ...c, [field]: val } : c));
 
   const toggleLike  = (item) => setLikes(prev  => { const s = new Set(prev); s.has(item) ? s.delete(item) : s.add(item); return s; });
   const toggleAvoid = (item) => setAvoids(prev => { const s = new Set(prev); s.has(item) ? s.delete(item) : s.add(item); return s; });
 
   const handleSave = async () => {
     setSaving(true);
+    const validChildren = type === 'family'
+      ? children.filter(c => c.birthday).map(c => ({ id: c.id, name: c.name, birthday: c.birthday }))
+      : [];
+    const firstBaby = validChildren.find(c => { const m = getChildCategory(c.birthday); return m.isBaby; });
     await onSave({
       family_type:   type,
       partner_name:  type !== 'solo' ? (partnerName || null) : null,
-      baby_name:     type === 'family' ? (babyName || null) : null,
-      baby_birthday: type === 'family' ? (babyBday || null) : null,
+      children:      validChildren,
+      baby_name:     firstBaby?.name ?? null,
+      baby_birthday: firstBaby?.birthday ?? null,
       shopping_day:  shopday,
       food_likes:    Array.from(likes),
       allergies:     Array.from(avoids),
@@ -277,22 +297,74 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
             </div>
           )}
 
-          {/* 아기 정보 */}
+          {/* 자녀 정보 */}
           {type === 'family' && (
             <div style={{ marginBottom: 22 }}>
-              <FieldLabel>아기 정보 (선택)</FieldLabel>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <TextInput value={babyName} onChange={setBabyName} placeholder="아기 이름 (선택)" />
-                <input
-                  type="date"
-                  value={babyBday}
-                  onChange={e => setBabyBday(e.target.value)}
-                  style={{
-                    width: '100%', padding: '12px 14px', boxSizing: 'border-box',
-                    background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 12,
-                    fontSize: 14, color: babyBday ? 'var(--ink)' : 'var(--ink-3)', outline: 'none',
-                  }}
-                />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <FieldLabel>자녀 정보 (선택)</FieldLabel>
+                {children.length < 6 && (
+                  <button onClick={addChild} style={{
+                    fontSize: 12, fontWeight: 700, color: accent,
+                    padding: '4px 10px', borderRadius: 8,
+                    border: `1px solid ${accent}44`, background: `${accent}10`,
+                  }}>+ 자녀 추가</button>
+                )}
+              </div>
+
+              {children.length === 0 && (
+                <div style={{ fontSize: 12.5, color: 'var(--ink-4)', padding: '10px 0' }}>
+                  자녀 추가 버튼으로 자녀를 등록하면 맞춤 식단이 구성됩니다.
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {children.map((child, i) => {
+                  const cat = child.birthday ? getChildCategory(child.birthday) : null;
+                  return (
+                    <div key={child.id} style={{
+                      padding: '12px 14px', borderRadius: 12,
+                      background: 'var(--bg)', border: '1px solid var(--line)',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <span style={{ fontSize: 16 }}>{cat?.icon ?? '👶'}</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>자녀 {i + 1}</span>
+                        {cat && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                            background: `${cat.color}22`, color: cat.color,
+                          }}>{cat.label}</span>
+                        )}
+                        <button
+                          onClick={() => removeChild(child.id)}
+                          style={{ marginLeft: 'auto', color: 'var(--ink-4)', fontSize: 16, lineHeight: 1 }}
+                        >×</button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <input
+                          value={child.name}
+                          onChange={e => updateChild(child.id, 'name', e.target.value)}
+                          placeholder="이름 (선택)"
+                          style={{
+                            width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+                            background: 'var(--surface)', border: '1px solid var(--line-soft)',
+                            borderRadius: 10, fontSize: 14, color: 'var(--ink)', outline: 'none',
+                          }}
+                        />
+                        <input
+                          type="date"
+                          value={child.birthday}
+                          onChange={e => updateChild(child.id, 'birthday', e.target.value)}
+                          style={{
+                            width: '100%', padding: '10px 12px', boxSizing: 'border-box',
+                            background: 'var(--surface)', border: '1px solid var(--line-soft)',
+                            borderRadius: 10, fontSize: 14,
+                            color: child.birthday ? 'var(--ink)' : 'var(--ink-3)', outline: 'none',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -385,10 +457,12 @@ function FamilyEditSheet({ open, profile, accent, onSave, onClose }) {
 export default function ProfileScreen() {
   const { accent, setAccent, theme, setTheme, showToast, showUpgrade } = useApp();
   const { user, logout } = useAuth();
-  const { family, profile, members, saveProfile, vapidPublicKey, planInfo } = useFamily();
+  const { family, profile, members, saveProfile, loadProfile, vapidPublicKey, planInfo } = useFamily();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [editOpen,     setEditOpen]     = useState(false);
+  const [billingLoading, setBillingLoading] = useState(false);
   const [deleteOpen,   setDeleteOpen]   = useState(false);
   const [inviteState,  setInviteState]  = useState('idle');   // idle | loading | ready
   const [inviteUrl,    setInviteUrl]    = useState(null);
@@ -407,6 +481,63 @@ export default function ProfileScreen() {
       reg.pushManager.getSubscription().then(sub => setPushEnabled(!!sub))
     );
   }, [pushSupported]);
+
+  // Toss 결제 리다이렉트 처리
+  useEffect(() => {
+    const billing = searchParams.get('billing');
+    if (!billing) return;
+
+    if (billing === 'fail') {
+      showToast('결제가 취소되었습니다.', 'error');
+      setSearchParams({}, { replace: true });
+      return;
+    }
+
+    if (billing === 'success') {
+      const authKey     = searchParams.get('authKey')     ?? '';
+      const customerKey = searchParams.get('customerKey') ?? '';
+      setBillingLoading(true);
+      setSearchParams({}, { replace: true });
+
+      (async () => {
+        try {
+          const token = localStorage.getItem(TOKEN_KEY);
+          const res = await fetch('/api/user/profile?action=subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ authKey, customerKey }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? '결제 처리 실패');
+          await loadProfile();
+          showToast('Premium 구독이 시작되었습니다!', 'success');
+        } catch (err) {
+          showToast(err.message || '구독 처리 중 오류가 발생했습니다.', 'error');
+        } finally {
+          setBillingLoading(false);
+        }
+      })();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleCancelSubscription = async () => {
+    if (!window.confirm('구독을 해지하시겠어요?\n이번 달 만료일까지는 계속 이용 가능합니다.')) return;
+    try {
+      const token = localStorage.getItem(TOKEN_KEY);
+      const res = await fetch('/api/user/profile?action=cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? '해지 처리 실패');
+      await loadProfile();
+      showToast('구독 해지가 완료되었습니다.', 'success');
+    } catch (err) {
+      showToast(err.message || '해지 처리 중 오류가 발생했습니다.', 'error');
+    }
+  };
 
   const togglePush = async () => {
     if (pushLoading || !vapidPublicKey) return;
@@ -565,10 +696,14 @@ export default function ProfileScreen() {
 
       {/* 내 플랜 카드 */}
       {planInfo && (() => {
-        const plan = planInfo.plan ?? 'free';
-        const isPremium = plan === 'premium';
-        const genLimit  = PLAN_LIMITS[plan].generate;
-        const chatLimit = PLAN_LIMITS[plan].chat;
+        const planType  = planInfo.plan_type ?? 'free';
+        const isAdmin   = planType === 'admin';
+        const isTest    = planType === 'test';
+        const isPremium = planType === 'premium';
+        const isSpecial = isAdmin || isTest;
+
+        const genLimit  = isSpecial ? 9999 : (PLAN_LIMITS[isPremium ? 'premium' : 'free'].generate);
+        const chatLimit = isSpecial ? 9999 : (PLAN_LIMITS[isPremium ? 'premium' : 'free'].chat);
         const genUsed   = planInfo.ai_generate_count ?? 0;
         const chatUsed  = planInfo.ai_chat_turns ?? 0;
         const month     = planInfo.ai_usage_month || '';
@@ -577,21 +712,44 @@ export default function ProfileScreen() {
         const displayGenUsed  = sameMonth ? genUsed  : 0;
         const displayChatUsed = sameMonth ? chatUsed : 0;
 
+        const expiresAt   = planInfo.plan_expires_at   ? new Date(planInfo.plan_expires_at)   : null;
+        const cancelledAt = planInfo.plan_cancelled_at ? new Date(planInfo.plan_cancelled_at) : null;
+
+        const planBadge = isAdmin
+          ? { label: 'ADMIN',   bg: '#1a1a2e', color: '#8888FF', border: '#4A4AFF44' }
+          : isTest
+          ? { label: 'TEST',    bg: '#0d2137', color: '#00BFFF', border: '#00BFFF44' }
+          : isPremium
+          ? { label: 'PREMIUM', bg: `${accent}22`, color: accent, border: 'transparent' }
+          : { label: 'FREE',    bg: 'var(--bg-2)', color: 'var(--ink-3)', border: 'transparent' };
+
         return (
           <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <div className="kr-en">PLAN · 내 플랜</div>
               <span style={{
                 fontSize: 10, padding: '3px 10px', borderRadius: 6, fontWeight: 800,
-                background: isPremium ? `${accent}22` : 'var(--bg-2)',
-                color: isPremium ? accent : 'var(--ink-3)',
+                background: planBadge.bg, color: planBadge.color,
+                border: `1px solid ${planBadge.border}`,
               }}>
-                {isPremium ? 'PREMIUM' : 'FREE'}
+                {isAdmin ? '👑 ' : isTest ? '🧪 ' : ''}{planBadge.label}
               </span>
             </div>
 
-            {/* 사용량 바 */}
-            {[
+            {/* 관리자/테스트 안내 */}
+            {isSpecial && (
+              <div style={{
+                marginBottom: 12, padding: '10px 12px', borderRadius: 10,
+                background: isAdmin ? '#1a1a2e' : '#0d2137',
+                border: `1px solid ${isAdmin ? '#4A4AFF33' : '#00BFFF33'}`,
+                fontSize: 12, color: isAdmin ? '#8888FF' : '#00BFFF',
+              }}>
+                {isAdmin ? '관리자 계정 — 모든 기능을 무제한으로 사용할 수 있습니다.' : '테스트 계정 — 프리미엄 기능을 무제한으로 사용할 수 있습니다.'}
+              </div>
+            )}
+
+            {/* 사용량 바 (관리자/테스트 제외) */}
+            {!isSpecial && [
               { label: 'AI 식단 생성', used: displayGenUsed, limit: genLimit, type: 'generate' },
               { label: 'AI 채팅',      used: displayChatUsed, limit: chatLimit, type: 'chat' },
             ].map(item => (
@@ -613,17 +771,55 @@ export default function ProfileScreen() {
               </div>
             ))}
 
-            <button
-              onClick={() => showUpgrade({ type: 'generate', isPremium, used: displayGenUsed, limit: genLimit })}
-              style={{
-                marginTop: 4, width: '100%', padding: '11px 0', borderRadius: 10,
-                border: `1px solid ${accent}55`, background: `${accent}10`,
-                fontSize: 13, fontWeight: 700, color: accent,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              }}
-            >
-              플랜 안내 보기
-            </button>
+            {/* 프리미엄 만료일 */}
+            {isPremium && expiresAt && (
+              <div style={{ marginBottom: 10, fontSize: 12, color: 'var(--ink-3)' }}>
+                {cancelledAt
+                  ? `구독 해지됨 · ${expiresAt.toLocaleDateString('ko-KR')} 만료`
+                  : `다음 결제일 ${expiresAt.toLocaleDateString('ko-KR')}`}
+              </div>
+            )}
+
+            {/* 결제 처리 중 */}
+            {billingLoading && (
+              <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: accent }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke={accent} strokeWidth="3" strokeOpacity="0.3"/>
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke={accent} strokeWidth="3" strokeLinecap="round">
+                    <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
+                  </path>
+                </svg>
+                구독 처리 중...
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+              <button
+                onClick={() => showUpgrade({ type: 'generate', isPremium, used: displayGenUsed, limit: genLimit })}
+                style={{
+                  width: '100%', padding: '11px 0', borderRadius: 10,
+                  border: `1px solid ${accent}55`, background: `${accent}10`,
+                  fontSize: 13, fontWeight: 700, color: accent,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                }}
+              >
+                플랜 안내 보기
+              </button>
+
+              {/* 구독 해지 버튼 (활성 프리미엄, 해지 전) */}
+              {isPremium && !cancelledAt && (
+                <button
+                  onClick={handleCancelSubscription}
+                  style={{
+                    width: '100%', padding: '11px 0', borderRadius: 10,
+                    border: '1px solid var(--line)', background: 'var(--bg)',
+                    fontSize: 13, fontWeight: 600, color: 'var(--ink-3)',
+                  }}
+                >
+                  구독 해지
+                </button>
+              )}
+            </div>
           </div>
         );
       })()}
@@ -644,16 +840,32 @@ export default function ProfileScreen() {
           </div>
         )}
 
-        {/* 아기 정보 */}
-        {family.has_baby && (
-          <div style={{ marginTop: 14, padding: '12px 14px', background: 'var(--baby-soft)', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 10, color: 'var(--baby-ink)' }}>
-            {Icon.baby(18)}
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>
-                {family.baby_name ? `${family.baby_name} · ` : ''}{family.baby_months}개월 · {family.baby_stage}
+        {/* 자녀 목록 */}
+        {family.children.length > 0 && (
+          <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {family.children.map((child, i) => (
+              <div key={child.id ?? i} style={{
+                padding: '10px 14px', borderRadius: 12,
+                background: child.isBaby ? 'var(--baby-soft)' : 'var(--bg)',
+                border: `1px solid ${child.isBaby ? 'var(--baby-ink)' : 'var(--line)'}22`,
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{ fontSize: 18 }}>{child.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
+                    {child.name || `자녀 ${i + 1}`}
+                    <span style={{
+                      marginLeft: 8, fontSize: 10, fontWeight: 700,
+                      padding: '2px 7px', borderRadius: 999,
+                      background: `${child.color}22`, color: child.color,
+                    }}>{child.label}</span>
+                  </div>
+                  {child.isBaby && (
+                    <div className="kr-en" style={{ marginTop: 2, fontSize: 10 }}>이유식 자동 분기 활성화</div>
+                  )}
+                </div>
               </div>
-              <div className="kr-en" style={{ marginTop: 2 }}>이유식 자동 분기 활성화</div>
-            </div>
+            ))}
           </div>
         )}
 
