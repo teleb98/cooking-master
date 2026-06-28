@@ -151,8 +151,13 @@ ${recipeList}
 9. 주간 패턴: 1주 내 생선 2회, 콩류(두부 포함) 2회, 채소 위주 메뉴 1회 이상 포함
 10. 14일 × 아침·점심·저녁 = 총 42개 항목 전부 포함
 
+## 날짜 표기 규칙 (중요)
+- 날짜는 직접 계산하지 말고, "day" 필드에 1~14 사이의 정수(몇 번째 날인지)만 적으세요.
+- day=1은 ${dates[0]} (1주차 월요일), day=14는 ${dates[13]} (2주차 일요일)입니다.
+- 실제 날짜 문자열(YYYY-MM-DD)은 서버에서 day 값으로부터 계산하므로 절대 plan_date를 직접 쓰지 마세요.
+
 JSON 형식으로만 응답 (설명 없이):
-{"plan":[{"plan_date":"YYYY-MM-DD","meal_type":"breakfast","menu_name":"메뉴명"},...]}`;
+{"plan":[{"day":1,"meal_type":"breakfast","menu_name":"메뉴명"},...]}`;
 
     const geminiRes = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
       method: 'POST',
@@ -203,11 +208,25 @@ JSON 형식으로만 응답 (설명 없이):
       return res.status(502).json({ error: '식단을 생성하지 못했습니다. 다시 시도해주세요.' });
     }
 
-    // Validate: only accept entries with known recipe names
+    // Validate: only accept entries with known recipe names AND a day index within 1~14.
+    // The actual plan_date is computed server-side from `dates[day-1]` — Gemini's own date
+    // arithmetic is never trusted, since it occasionally echoes back wrong/off-range dates,
+    // which would otherwise save rows the Calendar's date-range query can never retrieve.
     const recipeMap = new Map(allRecipes.map(r => [r.name, r]));
-    const validPlan = plan.filter(e =>
-      e.plan_date && e.meal_type && e.menu_name && recipeMap.has(e.menu_name)
-    );
+    const droppedEntries = [];
+    const validPlan = plan.filter(e => {
+      const day = Number(e.day);
+      if (!Number.isInteger(day) || day < 1 || day > 14 || !e.meal_type || !e.menu_name || !recipeMap.has(e.menu_name)) {
+        droppedEntries.push(e);
+        return false;
+      }
+      e.plan_date = dates[day - 1];
+      return true;
+    });
+
+    if (droppedEntries.length > 0) {
+      console.error('[generate-plan] dropped invalid entries:', JSON.stringify(droppedEntries).slice(0, 500));
+    }
 
     if (validPlan.length === 0) {
       console.error('[generate-plan] no valid entries after validation');
