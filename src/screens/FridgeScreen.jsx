@@ -20,6 +20,16 @@ async function apiFetch(path, opts = {}) {
 const CATEGORIES = ['육류', '생선', '채소', '과일', '유제품', '곡물·기타', '기타'];
 const CAT_ICONS  = { '육류': '🥩', '생선': '🐟', '채소': '🥦', '과일': '🍎', '유제품': '🥛', '곡물·기타': '🌾', '기타': '📦' };
 const DEFAULT_EXPIRY = { '육류': 3, '생선': 2, '채소': 5, '과일': 5, '유제품': 7, '곡물·기타': 30, '기타': 7 };
+const UNITS = ['개', 'g', 'kg', 'ml', 'L', '팩', '봉', '캔', '병', '묶음', '줄'];
+
+function parseQty(str) {
+  const m = (str ?? '1개').trim().match(/^([\d.]+)\s*(.+)?$/);
+  if (m) return { amount: m[1], unit: (m[2] ?? '개').trim() || '개' };
+  return { amount: '1', unit: str || '개' };
+}
+function buildQty(amount, unit) {
+  return `${amount || '1'}${unit}`;
+}
 
 function localDateStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -48,21 +58,161 @@ function defaultExpiresAt(cat) {
   return localDateStr(d);
 }
 
+/* ── 수량 입력 컴포넌트 (숫자 + 단위 칩) ───────────────── */
+function QtyInput({ amount, unit, onAmountChange, onUnitChange, accent }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <input
+          type="number" min="0" step="any"
+          value={amount}
+          onChange={e => onAmountChange(e.target.value)}
+          style={{
+            width: 80, border: '1px solid var(--line)', borderRadius: 8,
+            padding: '8px 10px', fontSize: 16, fontWeight: 700,
+            color: 'var(--ink)', background: 'var(--surface)',
+            outline: 'none', textAlign: 'center',
+            fontFamily: 'var(--font-mono)',
+          }}
+        />
+        <span style={{ fontSize: 14, color: 'var(--ink-3)', fontWeight: 600 }}>
+          {unit}
+        </span>
+      </div>
+      <div className="no-scrollbar" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+        {UNITS.map(u => (
+          <button key={u} onClick={() => onUnitChange(u)} style={{
+            flexShrink: 0,
+            padding: '5px 11px', borderRadius: 999,
+            background: unit === u ? accent : 'var(--bg-2)',
+            color: unit === u ? '#fff' : 'var(--ink-2)',
+            fontSize: 12, fontWeight: 600,
+            border: unit === u ? 'none' : '1px solid var(--line)',
+            transition: 'all 120ms',
+          }}>{u}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ── OCR 항목 행 (인라인 편집) ────────────────────────── */
+function ScanItemRow({ item, index, selected, onToggle, onUpdate, accent }) {
+  const [expanded, setExpanded] = useState(false);
+  const parsed = parseQty(item.qty);
+  const dl = daysLeft(item.expires_at);
+
+  const update = (patch) => onUpdate(index, patch);
+
+  return (
+    <div style={{ borderBottom: '1px solid var(--line-soft)' }}>
+      {/* 요약 행 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 0' }}>
+        <button
+          onClick={() => onToggle(index)}
+          style={{
+            width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+            background: selected ? accent : 'var(--surface)',
+            border: selected ? 'none' : '1.5px solid var(--line)',
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >{selected && Icon.check(12)}</button>
+
+        {/* 재료명 (인라인 편집) */}
+        <input
+          value={item.name}
+          onChange={e => update({ name: e.target.value })}
+          style={{
+            flex: 1, border: 'none', outline: 'none', background: 'none',
+            fontSize: 14, fontWeight: 600, color: 'var(--ink)', minWidth: 0,
+          }}
+        />
+
+        {/* 수량 요약 + 편집 토글 */}
+        <button
+          onClick={() => setExpanded(s => !s)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0,
+            padding: '4px 8px', borderRadius: 7,
+            background: 'var(--bg-2)', border: '1px solid var(--line)',
+            fontSize: 12, fontWeight: 700, color: 'var(--ink-2)',
+          }}
+        >
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{item.qty}</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d={expanded ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'}/>
+          </svg>
+        </button>
+
+        {/* D-X 칩 */}
+        {dl !== null && (
+          <div style={{
+            fontSize: 10, fontWeight: 700, padding: '3px 7px', borderRadius: 6,
+            background: expiryBg(dl), color: expiryColor(dl), flexShrink: 0,
+          }}>D-{dl}</div>
+        )}
+      </div>
+
+      {/* 확장: 수량 + 유통기한 편집 */}
+      {expanded && (
+        <div style={{
+          background: 'var(--bg-2)', borderRadius: 10, padding: '12px 14px',
+          marginBottom: 10, display: 'flex', flexDirection: 'column', gap: 12,
+        }}>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--ink-4)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>수량 / 무게</div>
+            <QtyInput
+              amount={parsed.amount}
+              unit={parsed.unit}
+              onAmountChange={a => update({ qty: buildQty(a, parsed.unit) })}
+              onUnitChange={u => update({ qty: buildQty(parsed.amount, u) })}
+              accent={accent}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--ink-4)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>유통기한</div>
+            <input
+              type="date" value={item.expires_at ?? ''}
+              onChange={e => update({ expires_at: e.target.value })}
+              style={{ border: '1px solid var(--line)', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: 'var(--ink)', background: 'var(--surface)', outline: 'none' }}
+            />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--ink-4)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>카테고리</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+              {CATEGORIES.map(cat => (
+                <button key={cat} onClick={() => update({ category: cat })} style={{
+                  padding: '4px 10px', borderRadius: 999,
+                  background: item.category === cat ? accent : 'var(--surface)',
+                  color: item.category === cat ? '#fff' : 'var(--ink-3)',
+                  fontSize: 11, fontWeight: 600,
+                  border: item.category === cat ? 'none' : '1px solid var(--line)',
+                }}>{CAT_ICONS[cat]} {cat}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── 빠른 추가 시트 ──────────────────────────────────── */
 function AddSheet({ open, onClose, onAdd, accent }) {
   const [name, setName]         = useState('');
-  const [qty, setQty]           = useState('1개');
+  const [amount, setAmount]     = useState('1');
+  const [unit, setUnit]         = useState('개');
   const [category, setCategory] = useState('기타');
   const [expiresAt, setExpires] = useState(defaultExpiresAt('기타'));
   const [scanning, setScanning] = useState(false);
-  const [scanItems, setScanItems] = useState(null); // OCR 결과
+  const [scanItems, setScanItems] = useState(null);
   const [scanSelected, setScanSelected] = useState({});
   const fileRef = useRef(null);
   const nameRef = useRef(null);
 
   useEffect(() => {
     if (open) {
-      setName(''); setQty('1개'); setCategory('기타');
+      setName(''); setAmount('1'); setUnit('개'); setCategory('기타');
       setExpires(defaultExpiresAt('기타')); setScanItems(null); setScanSelected({});
       setTimeout(() => nameRef.current?.focus(), 150);
     }
@@ -75,7 +225,7 @@ function AddSheet({ open, onClose, onAdd, accent }) {
 
   const handleAdd = () => {
     if (!name.trim()) return;
-    onAdd([{ name: name.trim(), qty, category, expires_at: expiresAt }]);
+    onAdd([{ name: name.trim(), qty: buildQty(amount, unit), category, expires_at: expiresAt }]);
     onClose();
   };
 
@@ -111,6 +261,10 @@ function AddSheet({ open, onClose, onAdd, accent }) {
     }
   };
 
+  const updateScanItem = (index, patch) => {
+    setScanItems(prev => prev.map((it, i) => i === index ? { ...it, ...patch } : it));
+  };
+
   const handleScanAdd = () => {
     const toAdd = scanItems.filter((_, i) => scanSelected[i]);
     if (toAdd.length) onAdd(toAdd);
@@ -125,17 +279,28 @@ function AddSheet({ open, onClose, onAdd, accent }) {
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background: 'var(--surface)', borderRadius: '20px 20px 0 0',
-        width: '100%', maxHeight: '88dvh',
+        width: '100%', maxHeight: '90dvh',
         display: 'flex', flexDirection: 'column',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
       }}>
         <div style={{ padding: '18px 18px 12px', borderBottom: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>재료 추가</div>
-          <button onClick={onClose}>{Icon.close(18)}</button>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>
+            {scanItems !== null ? '인식 결과 확인' : '재료 추가'}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {scanItems !== null && (
+              <button
+                onClick={() => setScanItems(null)}
+                style={{ fontSize: 12, color: accent, fontWeight: 600, padding: '4px 8px', borderRadius: 6, border: `1px solid ${accent}40`, background: `${accent}0D` }}
+              >직접 입력</button>
+            )}
+            <button onClick={onClose}>{Icon.close(18)}</button>
+          </div>
         </div>
 
         <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* 영수증 스캔 버튼 */}
+
+          {/* 영수증 스캔 버튼 (직접입력 모드일 때만) */}
           {!scanItems && (
             <button
               onClick={() => fileRef.current?.click()}
@@ -163,35 +328,20 @@ function AddSheet({ open, onClose, onAdd, accent }) {
           {/* OCR 결과 리뷰 */}
           {scanItems !== null && (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 10 }}>
-                {scanItems.length > 0 ? `인식된 재료 ${scanItems.length}개 — 추가할 항목을 선택하세요` : '영수증에서 식재료를 인식하지 못했습니다'}
+              <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 4 }}>
+                {scanItems.length > 0
+                  ? `${scanItems.length}개 재료 인식됨 · 수량을 탭하면 직접 수정할 수 있어요`
+                  : '영수증에서 식재료를 인식하지 못했습니다'}
               </div>
-              {scanItems.map((it, i) => {
-                const dl = daysLeft(it.expires_at);
-                return (
-                  <div key={i} style={{
-                    display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0',
-                    borderBottom: '1px solid var(--line-soft)',
-                  }}>
-                    <button
-                      onClick={() => setScanSelected(s => ({ ...s, [i]: !s[i] }))}
-                      style={{
-                        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                        background: scanSelected[i] ? accent : 'var(--surface)',
-                        border: scanSelected[i] ? 'none' : '1.5px solid var(--line)',
-                        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      }}>{scanSelected[i] && Icon.check(12)}</button>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600 }}>{it.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--ink-3)' }}>{it.qty} · {it.category}</div>
-                    </div>
-                    <div style={{
-                      fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 6,
-                      background: expiryBg(dl), color: expiryColor(dl),
-                    }}>D-{dl}</div>
-                  </div>
-                );
-              })}
+              {scanItems.map((it, i) => (
+                <ScanItemRow
+                  key={i} item={it} index={i}
+                  selected={!!scanSelected[i]}
+                  onToggle={idx => setScanSelected(s => ({ ...s, [idx]: !s[idx] }))}
+                  onUpdate={updateScanItem}
+                  accent={accent}
+                />
+              ))}
               {scanItems.length > 0 && (
                 <button onClick={handleScanAdd} style={{
                   marginTop: 14, width: '100%', padding: '14px 0', borderRadius: 12,
@@ -199,6 +349,12 @@ function AddSheet({ open, onClose, onAdd, accent }) {
                 }}>
                   선택 항목 추가 ({Object.values(scanSelected).filter(Boolean).length}개)
                 </button>
+              )}
+              {scanItems.length === 0 && (
+                <button onClick={() => setScanItems(null)} style={{
+                  marginTop: 14, width: '100%', padding: '14px 0', borderRadius: 12,
+                  background: 'var(--bg-2)', color: 'var(--ink-2)', fontSize: 14, fontWeight: 600,
+                }}>직접 입력으로 전환</button>
               )}
             </div>
           )}
@@ -208,7 +364,7 @@ function AddSheet({ open, onClose, onAdd, accent }) {
             <>
               <div style={{ borderRadius: 12, border: '1px solid var(--line)', overflow: 'hidden' }}>
                 <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
-                  <div style={{ fontSize: 10, color: 'var(--ink-4)', fontWeight: 600, marginBottom: 4 }}>재료명</div>
+                  <div style={{ fontSize: 10, color: 'var(--ink-4)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 4 }}>재료명</div>
                   <input ref={nameRef} value={name} onChange={e => setName(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleAdd()}
                     placeholder="예: 두부, 돼지고기, 당근"
@@ -216,14 +372,15 @@ function AddSheet({ open, onClose, onAdd, accent }) {
                   />
                 </div>
                 <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line-soft)' }}>
-                  <div style={{ fontSize: 10, color: 'var(--ink-4)', fontWeight: 600, marginBottom: 4 }}>수량</div>
-                  <input value={qty} onChange={e => setQty(e.target.value)}
-                    placeholder="예: 1개, 500g, 1팩"
-                    style={{ width: '100%', border: 'none', outline: 'none', background: 'none', fontSize: 15, color: 'var(--ink)' }}
+                  <div style={{ fontSize: 10, color: 'var(--ink-4)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 8 }}>수량 / 무게</div>
+                  <QtyInput
+                    amount={amount} unit={unit}
+                    onAmountChange={setAmount} onUnitChange={setUnit}
+                    accent={accent}
                   />
                 </div>
                 <div style={{ padding: '12px 14px' }}>
-                  <div style={{ fontSize: 10, color: 'var(--ink-4)', fontWeight: 600, marginBottom: 6 }}>유통기한</div>
+                  <div style={{ fontSize: 10, color: 'var(--ink-4)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 6 }}>유통기한</div>
                   <input type="date" value={expiresAt} onChange={e => setExpires(e.target.value)}
                     style={{ border: 'none', outline: 'none', background: 'none', fontSize: 14, color: 'var(--ink)' }}
                   />
