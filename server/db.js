@@ -128,6 +128,20 @@ const SCHEMA_PG = `
   );
   CREATE INDEX IF NOT EXISTS idx_invite_tokens_token ON invite_tokens(token);
   CREATE INDEX IF NOT EXISTS idx_invite_tokens_invited_by ON invite_tokens(invited_by);
+
+  CREATE TABLE IF NOT EXISTS fridge_items (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    family_group_id TEXT REFERENCES family_groups(id),
+    name            TEXT NOT NULL,
+    qty             TEXT DEFAULT '1개',
+    category        TEXT DEFAULT '기타',
+    expires_at      TIMESTAMPTZ,
+    added_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    consumed_at     TIMESTAMPTZ
+  );
+  CREATE INDEX IF NOT EXISTS idx_fridge_items_user ON fridge_items(user_id);
+  CREATE INDEX IF NOT EXISTS idx_fridge_items_family ON fridge_items(family_group_id);
 `;
 
 const SCHEMA_SQLITE = `
@@ -252,6 +266,20 @@ const SCHEMA_SQLITE = `
   );
   CREATE INDEX IF NOT EXISTS idx_invite_tokens_token ON invite_tokens(token);
   CREATE INDEX IF NOT EXISTS idx_invite_tokens_invited_by ON invite_tokens(invited_by);
+
+  CREATE TABLE IF NOT EXISTS fridge_items (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    family_group_id TEXT REFERENCES family_groups(id),
+    name            TEXT NOT NULL,
+    qty             TEXT DEFAULT '1개',
+    category        TEXT DEFAULT '기타',
+    expires_at      TEXT,
+    added_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    consumed_at     TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_fridge_items_user ON fridge_items(user_id);
+  CREATE INDEX IF NOT EXISTS idx_fridge_items_family ON fridge_items(family_group_id);
 `;
 
 // ── PostgreSQL ──────────────────────────────────────────

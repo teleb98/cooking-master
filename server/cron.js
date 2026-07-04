@@ -94,7 +94,46 @@ export async function runDailyJob() {
       ['free', new Date().toISOString(), c.user_id]);
   }
 
-  console.log(`[cron] push sent=${sent} expired=${expiredIds.length} failed=${failed} renewed=${renewed} renewFailed=${renewFailed} downgraded=${cancelled.length}`);
+  // ── 4. 냉장고 유통기한 임박 알림 (D-2 이내) ─────────────────
+  const alertBefore = new Date();
+  alertBefore.setDate(alertBefore.getDate() + 2);
+  const alertDate = alertBefore.toISOString().slice(0, 10);
+
+  // 유통기한이 D-2 이내인 재료를 유저별로 집계
+  const expiringRows = await db.getMany(
+    `SELECT fi.user_id, fi.name, fi.expires_at, up.push_subscription, fi.family_group_id
+     FROM fridge_items fi
+     JOIN user_profiles up ON (fi.user_id = up.user_id OR (fi.family_group_id IS NOT NULL AND fi.family_group_id = (SELECT family_group_id FROM user_profiles WHERE user_id = up.user_id LIMIT 1)))
+     WHERE fi.consumed_at IS NULL AND fi.expires_at IS NOT NULL AND fi.expires_at <= $1
+       AND up.push_subscription IS NOT NULL`,
+    [alertDate],
+  );
+
+  // 유저별 임박 재료 묶기
+  const byUser = {};
+  for (const row of expiringRows) {
+    if (!byUser[row.user_id]) byUser[row.user_id] = { sub: row.push_subscription, names: [] };
+    byUser[row.user_id].names.push(row.name);
+  }
+
+  let fridgeSent = 0;
+  for (const [uid, { sub, names }] of Object.entries(byUser)) {
+    if (!sub) continue;
+    try {
+      const uniqueNames = [...new Set(names)].slice(0, 3);
+      const body = `${uniqueNames.join(', ')} 등 ${names.length}개 재료가 곧 유통기한이 지나요`;
+      await webpush.sendNotification(JSON.parse(sub), JSON.stringify({
+        title: '🧊 냉장고 알림',
+        body,
+        url: '/fridge',
+      }));
+      fridgeSent++;
+    } catch {
+      // 만료된 구독은 일반 push 알림 처리에서 이미 정리됨
+    }
+  }
+
+  console.log(`[cron] push sent=${sent} expired=${expiredIds.length} failed=${failed} renewed=${renewed} renewFailed=${renewFailed} downgraded=${cancelled.length} fridgeAlerts=${fridgeSent}`);
 }
 
 export function startCron() {

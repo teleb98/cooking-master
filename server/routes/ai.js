@@ -109,10 +109,16 @@ router.post('/chat', requireAuth, async (req, res) => {
     const week2End    = addDays(week2, 6);  // 다음 주 일요일
     const weekEnd     = week2End;
 
-    const [meals, profileRow, recipeRows] = await Promise.all([
+    const [meals, profileRow, recipeRows, fridgeRows] = await Promise.all([
       db.getMany('SELECT * FROM meal_plans WHERE user_id = $1 AND plan_date >= $2 AND plan_date <= $3 ORDER BY plan_date, meal_type', [userId, week1, weekEnd]),
       db.getOne('SELECT * FROM user_profiles WHERE user_id = $1', [userId]),
       db.getMany('SELECT name, kcal, baby, tags FROM recipes WHERE user_id IS NULL OR user_id = $1 ORDER BY name', [userId]),
+      db.getMany(
+        `SELECT name, qty, category, expires_at FROM fridge_items
+         WHERE (user_id = $1 OR family_group_id = (SELECT family_group_id FROM user_profiles WHERE user_id = $1))
+           AND consumed_at IS NULL ORDER BY expires_at ASC NULLS LAST`,
+        [userId],
+      ),
     ]);
     const profile = parseProfile(profileRow);
     const allRecipes = recipeRows.map(r => ({ ...r, baby: !!r.baby }));
@@ -162,6 +168,21 @@ ${hasBaby ? `- 아기(${babyMonths}개월, ${babyMonths < 6 ? '초기' : babyMon
 
     const prefSection = prefLines.length > 0 ? `\n사용자 취향:\n${prefLines.join('\n')}` : '';
 
+    // 냉장고 컨텍스트 구성
+    const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+    const urgent = fridgeRows.filter(f => {
+      if (!f.expires_at) return false;
+      const exp = new Date(f.expires_at + 'T00:00:00');
+      return (exp - today0) / 86_400_000 <= 3;
+    });
+    const fridgeSection = fridgeRows.length > 0
+      ? `\n## 냉장고 재고 현황\n${fridgeRows.map(f => {
+          if (!f.expires_at) return `- ${f.name} (${f.qty})`;
+          const daysLeft = Math.ceil((new Date(f.expires_at + 'T00:00:00') - today0) / 86_400_000);
+          return `- ${f.name} (${f.qty}) · 유통기한 D-${daysLeft}`;
+        }).join('\n')}\n\n임박 재료(3일 이내): ${urgent.length > 0 ? urgent.map(f => f.name).join(', ') : '없음'}\n- 임박 재료가 있으면 해당 재료를 사용하는 메뉴를 **반드시** 우선 추천하세요.`
+      : '\n## 냉장고 재고 현황\n등록된 재료 없음';
+
     const systemPrompt = `당신은 한국 가족의 식단 관리를 돕는 AI 어시스턴트 'Cooking Master'입니다.
 
 ## 날짜 기준 (절대 준수)
@@ -189,6 +210,8 @@ ${hasBaby ? `- 아기(${babyMonths}개월, ${babyMonths < 6 ? '초기' : babyMon
 - 장보는 요일: ${['월','화','수','목','금','토','일'][profile.shopping_day ?? 6]}요일
 ${prefSection}
 ${familyGuide}
+
+${fridgeSection}
 
 ## 현재 2주 식단
 ${planText || '식단 없음'}

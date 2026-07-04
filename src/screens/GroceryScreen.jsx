@@ -4,6 +4,45 @@ import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
 import Icon from '../icons';
 
+const MARKETS = [
+  {
+    name: '쿠팡 로켓프레시',
+    emoji: '🛒',
+    color: '#E3002C',
+    open: (query) => {
+      const url = `coupang://search?keyword=${encodeURIComponent(query)}`;
+      const web = `https://www.coupang.com/np/search?q=${encodeURIComponent(query)}`;
+      const a = document.createElement('a'); a.href = url;
+      setTimeout(() => { window.location.href = web; }, 1500);
+      a.click();
+    },
+  },
+  {
+    name: '마켓컬리',
+    emoji: '🥬',
+    color: '#5A2E89',
+    open: (query) => {
+      const url = `kurly://search?keyword=${encodeURIComponent(query)}`;
+      const web = `https://www.kurly.com/search?sword=${encodeURIComponent(query)}`;
+      const a = document.createElement('a'); a.href = url;
+      setTimeout(() => { window.location.href = web; }, 1500);
+      a.click();
+    },
+  },
+  {
+    name: '배민마트',
+    emoji: '🛵',
+    color: '#00BCF5',
+    open: (query) => {
+      const url = `baemin://search?q=${encodeURIComponent(query)}`;
+      const web = `https://baemin.com`;
+      const a = document.createElement('a'); a.href = url;
+      setTimeout(() => { window.location.href = web; }, 1500);
+      a.click();
+    },
+  },
+];
+
 const TOKEN_KEY = 'cookingMaster_token';
 
 async function apiFetch(path, opts = {}) {
@@ -142,6 +181,30 @@ export default function GroceryScreen() {
   }));
   const total = items.length;
   const done = items.filter(i => i.is_bought).length;
+  const allDone = total > 0 && done === total;
+
+  const sendToFridge = async () => {
+    const boughtItems = items.filter(i => i.is_bought).map(i => ({
+      name: i.name,
+      qty: i.qty,
+      category: i.category,
+    }));
+    try {
+      await apiFetch('/fridge', {
+        method: 'POST',
+        body: JSON.stringify({ items: boughtItems }),
+      });
+      showToast(`${boughtItems.length}개 재료를 냉장고에 추가했어요.`);
+      navigate('/fridge');
+    } catch {
+      showToast('냉장고 추가에 실패했어요.');
+    }
+  };
+
+  const openMarket = (market) => {
+    const query = items.filter(i => !i.is_bought).map(i => i.name).join(' ');
+    market.open(query || '식재료');
+  };
 
   // D-X until shopping day
   const today = new Date();
@@ -240,6 +303,62 @@ export default function GroceryScreen() {
             }}>
               {generating ? '생성 중...' : '장보기 목록 자동 생성'}
             </button>
+          </div>
+        )}
+
+        {/* 장보기 완료 → 냉장고 연동 배너 */}
+        {allDone && (
+          <div style={{
+            margin: '0 0 14px',
+            background: `linear-gradient(135deg, ${accent}18 0%, ${accent}08 100%)`,
+            border: `1.5px solid ${accent}40`,
+            borderRadius: 16, padding: '16px 18px',
+            display: 'flex', alignItems: 'center', gap: 14,
+          }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 12, background: accent, flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+            }}>{Icon.fridge(22)}</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ink)', marginBottom: 3 }}>
+                🎉 장보기 완료!
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                구입한 재료를 냉장고에 바로 등록할 수 있어요
+              </div>
+            </div>
+            <button
+              onClick={sendToFridge}
+              style={{
+                padding: '10px 16px', borderRadius: 10,
+                background: accent, color: '#fff', fontSize: 13, fontWeight: 700,
+                whiteSpace: 'nowrap', flexShrink: 0,
+                boxShadow: `0 3px 10px ${accent}4D`,
+              }}
+            >냉장고에 넣기</button>
+          </div>
+        )}
+
+        {/* 마트 딥링크 — 아직 미구매 재료가 있을 때 */}
+        {!allDone && total > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '0.06em', padding: '4px 4px 8px' }}>
+              빠른 주문
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {MARKETS.map(m => (
+                <button key={m.name} onClick={() => openMarket(m)} style={{
+                  flex: 1, padding: '10px 6px', borderRadius: 12,
+                  background: 'var(--surface)', border: '1px solid var(--line)',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                }}>
+                  <span style={{ fontSize: 20 }}>{m.emoji}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: m.color, lineHeight: 1.3, textAlign: 'center' }}>
+                    {m.name.split(' ')[0]}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

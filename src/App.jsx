@@ -21,6 +21,7 @@ import RecipeScreen      from './screens/RecipeScreen';
 import PrivacyScreen     from './screens/PrivacyScreen';
 import DataDeletionScreen from './screens/DataDeletionScreen';
 import JoinScreen        from './screens/JoinScreen';
+import FridgeScreen      from './screens/FridgeScreen';
 
 function RequireAuth({ children }) {
   const { isAuthenticated, authLoading } = useAuth();
@@ -122,7 +123,7 @@ function GlobalToast() {
 
 const HIDE_NAV = ['/welcome', '/login', '/onboarding', '/join', '/'];
 
-const SHOW_SIDEBAR = ['/calendar', '/grocery', '/recipes', '/profile'];
+const SHOW_SIDEBAR = ['/calendar', '/grocery', '/fridge', '/recipes', '/profile'];
 
 function AppShell() {
   const { accent, onboarded, theme } = useApp();
@@ -153,6 +154,7 @@ function AppShell() {
       <Route path="/login"    element={isAuthenticated ? <Navigate to="/" replace /> : <LoginScreen />} />
       <Route path="/onboarding"    element={<RequireAuth><OnboardingScreen /></RequireAuth>} />
       <Route path="/grocery"       element={<RequireAuth><GroceryScreen /></RequireAuth>} />
+      <Route path="/fridge"        element={<RequireAuth><FridgeScreen /></RequireAuth>} />
       <Route path="/recipes"       element={<RequireAuth><RecipeScreen /></RequireAuth>} />
       <Route path="/profile"       element={<RequireAuth><ProfileScreen /></RequireAuth>} />
       <Route path="/join"          element={<JoinScreen />} />

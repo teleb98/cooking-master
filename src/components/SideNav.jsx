@@ -6,6 +6,7 @@ import Icon from '../icons';
 const TABS = [
   { path: '/calendar', label: '식단',  labelEn: 'Meal Plan', icon: s => Icon.calendar(s) },
   { path: '/grocery',  label: '장보기', labelEn: 'Grocery',   icon: s => Icon.cart(s) },
+  { path: '/fridge',   label: '냉장고', labelEn: 'Fridge',    icon: s => Icon.fridge(s) },
   { path: '/recipes',  label: '레시피', labelEn: 'Recipes',   icon: s => Icon.book(s) },
   { path: '/profile',  label: '설정',  labelEn: 'Settings',  icon: s => Icon.settings(s) },
 ];

@@ -9,6 +9,7 @@ import profileRouter from './routes/profile.js';
 import mealsRouter   from './routes/meals.js';
 import recipesRouter from './routes/recipes.js';
 import groceryRouter from './routes/grocery.js';
+import fridgeRouter  from './routes/fridge.js';
 import aiRouter      from './routes/ai.js';
 import inviteRouter  from './routes/invite.js';
 
@@ -35,6 +36,7 @@ app.use('/api/user/profile', profileRouter);
 app.use('/api/meals',   mealsRouter);
 app.use('/api/recipes', recipesRouter);
 app.use('/api/grocery', groceryRouter);
+app.use('/api/fridge',  fridgeRouter);
 app.use('/api/ai',      aiRouter);
 app.use('/api/invite',  inviteRouter);
 app.get('/api/health', (_req, res) =>
