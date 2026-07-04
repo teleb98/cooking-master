@@ -64,6 +64,14 @@
   --shadow-lg:  0 18px 40px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3);
 }
 
+/* ── 데스크톱 레이아웃 변수 ─────────────────────────────── */
+@media (min-width: 1024px) {
+  :root {
+    --nav-h: 0px;
+    --sidebar-w: 240px;
+  }
+}
+
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body, #root {

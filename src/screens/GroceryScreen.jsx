@@ -22,12 +22,15 @@ async function apiFetch(path, opts = {}) {
 
 function getWeekStart() {
   const today = new Date();
-  const dow = today.getUTCDay();
+  const dow = today.getDay(); // 로컬 요일
   const diff = dow === 0 ? -6 : 1 - dow;
   const mon = new Date(today);
-  mon.setUTCDate(today.getUTCDate() + diff);
-  mon.setUTCHours(0, 0, 0, 0);
-  return mon.toISOString().slice(0, 10);
+  mon.setDate(today.getDate() + diff);
+  mon.setHours(0, 0, 0, 0);
+  const y  = mon.getFullYear();
+  const m  = String(mon.getMonth() + 1).padStart(2, '0');
+  const d  = String(mon.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 const CAT_ORDER = ['육류', '채소', '유제품', '곡물·기타', '기타'];
@@ -142,7 +145,7 @@ export default function GroceryScreen() {
 
   // D-X until shopping day
   const today = new Date();
-  const todayDow = today.getUTCDay() === 0 ? 6 : today.getUTCDay() - 1;
+  const todayDow = today.getDay() === 0 ? 6 : today.getDay() - 1; // 로컬 요일, Mon=0
   let dUntil = (family.shopping_day - todayDow + 7) % 7;
   if (dUntil === 0) dUntil = 7;
 

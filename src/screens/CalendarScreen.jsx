@@ -23,44 +23,51 @@ async function apiFetch(path, opts = {}) {
   return res.json();
 }
 
+// 로컬 날짜(KST 등) 기준으로 주 시작(월요일)부터 7일을 반환
 function getWeekDates(weekOffset) {
   const today = new Date();
-  const dow = today.getUTCDay();
-  const diff = dow === 0 ? -6 : 1 - dow;
+  const dow = today.getDay(); // 로컬 요일 (0=일, 1=월, ...)
+  const diff = dow === 0 ? -6 : 1 - dow; // 이번 주 월요일까지의 차이
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today);
-    d.setUTCDate(today.getUTCDate() + diff + weekOffset * 7 + i);
-    d.setUTCHours(0, 0, 0, 0);
+    d.setDate(today.getDate() + diff + weekOffset * 7 + i);
+    d.setHours(0, 0, 0, 0);
     return d;
   });
 }
 
+// 로컬 날짜 기준 YYYY-MM-DD 문자열 반환 (toISOString은 UTC 기준이라 KST에서 날짜가 밀림)
 function toDateStr(d) {
-  return d.toISOString().slice(0, 10);
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
 }
 
 function daysUntil(targetDow) {
   const today = new Date();
-  const todayDow = today.getUTCDay() === 0 ? 6 : today.getUTCDay() - 1;
+  const todayDow = today.getDay() === 0 ? 6 : today.getDay() - 1; // 로컬 요일, Mon=0
   let diff = (targetDow - todayDow + 7) % 7;
   return diff === 0 ? 7 : diff;
 }
 
 function getMonthGrid(monthOffset) {
   const today = new Date();
-  const firstOfMonth = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + monthOffset, 1));
-  const lastOfMonth  = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + monthOffset + 1, 0));
-  const dow = firstOfMonth.getUTCDay();
+  const y = today.getFullYear();
+  const m = today.getMonth() + monthOffset; // 로컬 월 기준
+  const firstOfMonth = new Date(y, m, 1);
+  const lastOfMonth  = new Date(y, m + 1, 0);
+  const dow = firstOfMonth.getDay(); // 로컬 요일
   const startOffset = dow === 0 ? -6 : 1 - dow;
   const gridStart = new Date(firstOfMonth);
-  gridStart.setUTCDate(firstOfMonth.getUTCDate() + startOffset);
-  const totalCells = Math.ceil((lastOfMonth.getUTCDate() - startOffset) / 7) * 7;
+  gridStart.setDate(firstOfMonth.getDate() + startOffset);
+  const totalCells = Math.ceil((lastOfMonth.getDate() - startOffset) / 7) * 7;
   return {
-    year:  firstOfMonth.getUTCFullYear(),
-    month: firstOfMonth.getUTCMonth(),
+    year:  firstOfMonth.getFullYear(),
+    month: firstOfMonth.getMonth(),
     dates: Array.from({ length: totalCells }, (_, i) => {
       const d = new Date(gridStart);
-      d.setUTCDate(gridStart.getUTCDate() + i);
+      d.setDate(gridStart.getDate() + i);
       return d;
     }),
   };
@@ -313,14 +320,14 @@ export default function CalendarScreen() {
 
   const handleMonthDayClick = useCallback((date) => {
     const todayDate = new Date();
-    const todayDow  = todayDate.getUTCDay();
+    const todayDow  = todayDate.getDay(); // 로컬 요일
     const todayMon  = new Date(todayDate);
-    todayMon.setUTCDate(todayDate.getUTCDate() - (todayDow === 0 ? 6 : todayDow - 1));
-    todayMon.setUTCHours(0, 0, 0, 0);
-    const dateDow  = date.getUTCDay();
+    todayMon.setDate(todayDate.getDate() - (todayDow === 0 ? 6 : todayDow - 1));
+    todayMon.setHours(0, 0, 0, 0);
+    const dateDow  = date.getDay();
     const dateMon  = new Date(date);
-    dateMon.setUTCDate(date.getUTCDate() - (dateDow === 0 ? 6 : dateDow - 1));
-    dateMon.setUTCHours(0, 0, 0, 0);
+    dateMon.setDate(date.getDate() - (dateDow === 0 ? 6 : dateDow - 1));
+    dateMon.setHours(0, 0, 0, 0);
     const diffDays = Math.round((dateMon - todayMon) / 86_400_000);
     setWeek(Math.round(diffDays / 7));
     setViewMode('week');
@@ -414,7 +421,7 @@ export default function CalendarScreen() {
 
         if (viewMode === 'week') {
           const weekLabel  = week === 0 ? '이번 주' : week === 1 ? '다음 주' : week === -1 ? '지난 주' : week < 0 ? `${Math.abs(week)}주 전` : `${week}주 후`;
-          const rangeLabel = `${weekDates[0].getUTCMonth() + 1}/${weekDates[0].getUTCDate()}–${weekDates[6].getUTCDate()}`;
+          const rangeLabel = `${weekDates[0].getMonth() + 1}/${weekDates[0].getDate()}–${weekDates[6].getDate()}`;
           return (
             <div style={{ padding: '0 18px', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <button onClick={() => setWeek(w => w - 1)} style={navBtnStyle}>{Icon.chevronLeft(16)}</button>
@@ -426,7 +433,7 @@ export default function CalendarScreen() {
               <button
                 onClick={() => {
                   const todayD = new Date();
-                  const mo = (weekDates[0].getUTCFullYear() - todayD.getUTCFullYear()) * 12 + (weekDates[0].getUTCMonth() - todayD.getUTCMonth());
+                  const mo = (weekDates[0].getFullYear() - todayD.getFullYear()) * 12 + (weekDates[0].getMonth() - todayD.getMonth());
                   setMonthOffset(mo);
                   setViewMode('month');
                 }}
@@ -479,11 +486,11 @@ export default function CalendarScreen() {
               <div style={{ display: 'grid', gridTemplateColumns: '34px repeat(7, 1fr)', gap: 4, padding: '0 4px 8px' }}>
                 <div />
                 {weekDates.map((d, i) => {
-                  const isToday = d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
+                  const isToday = toDateStr(d) === toDateStr(today);
                   return (
                     <div key={i} style={{ textAlign: 'center', padding: '6px 0', borderRadius: 8, background: isToday ? 'var(--accent)' : 'transparent', color: isToday ? '#fff' : 'var(--ink-2)' }}>
                       <div style={{ fontSize: 10, fontWeight: 600, opacity: isToday ? 0.85 : 0.6 }}>{DAYS_KR[i]}</div>
-                      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{d.getUTCDate()}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{d.getDate()}</div>
                     </div>
                   );
                 })}
@@ -499,7 +506,7 @@ export default function CalendarScreen() {
                   {weekDates.map((d, di) => {
                     const key = `${toDateStr(d)}_${mt.key}`;
                     const meal = meals[key];
-                    const isToday = d.toISOString().slice(0, 10) === today.toISOString().slice(0, 10);
+                    const isToday = toDateStr(d) === toDateStr(today);
                     const highlight = isToday && mt.key === 'dinner';
                     return (
                       <button key={di} onClick={() => handleCellClick(d, mt.key, meal)} style={{
@@ -567,7 +574,7 @@ export default function CalendarScreen() {
                 const ds = toDateStr(d);
                 const todayStr = toDateStr(today);
                 const isToday   = ds === todayStr;
-                const isCurrent = d.getUTCMonth() === monthGrid.month;
+                const isCurrent = d.getMonth() === monthGrid.month;
                 const dayMeals  = MEAL_TYPES.map(mt => meals[`${ds}_${mt.key}`]);
                 const filledCount = dayMeals.filter(m => m?.menu_name).length;
                 return (
@@ -585,7 +592,7 @@ export default function CalendarScreen() {
                       fontSize: 13, fontWeight: isToday ? 700 : 500,
                       color: isToday ? '#fff' : 'var(--ink)', lineHeight: 1.2,
                     }}>
-                      {d.getUTCDate()}
+                      {d.getDate()}
                     </div>
                     <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
                       {MEAL_TYPES.map((mt, i) => (

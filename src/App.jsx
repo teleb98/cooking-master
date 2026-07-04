@@ -1,9 +1,11 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { AppProvider, useApp }       from './context/AppContext';
 import { AuthProvider, useAuth }     from './context/AuthContext';
 import { FamilyProvider }            from './context/FamilyContext';
 import BottomNav         from './components/BottomNav';
+import SideNav           from './components/SideNav';
+import { useDesktop }    from './hooks/useDesktop';
 import WelcomeScreen     from './screens/WelcomeScreen';
 import LoginScreen       from './screens/LoginScreen';
 import CalendarScreen    from './screens/CalendarScreen';
@@ -120,9 +122,14 @@ function GlobalToast() {
 
 const HIDE_NAV = ['/welcome', '/login', '/onboarding', '/join', '/'];
 
+const SHOW_SIDEBAR = ['/calendar', '/grocery', '/recipes', '/profile'];
+
 function AppShell() {
   const { accent, onboarded, theme } = useApp();
   const { isAuthenticated, authLoading } = useAuth();
+  const isDesktop = useDesktop();
+  const { pathname } = useLocation();
+  const showSidebar = isDesktop && isAuthenticated && SHOW_SIDEBAR.includes(pathname);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--accent', accent);
@@ -134,40 +141,69 @@ function AppShell() {
 
   if (authLoading) return <GlobalLoader />;
 
+  const routes = (
+    <Routes>
+      <Route path="/" element={
+        !isAuthenticated                                                    ? <WelcomeScreen />                     :
+        !onboarded && !localStorage.getItem('cookingMaster_onboarded')     ? <Navigate to="/onboarding" replace /> :
+                                                                              <Navigate to="/calendar" replace />
+      } />
+      <Route path="/calendar" element={<RequireAuth><CalendarScreen /></RequireAuth>} />
+      <Route path="/welcome"  element={isAuthenticated ? <Navigate to="/" replace /> : <WelcomeScreen />} />
+      <Route path="/login"    element={isAuthenticated ? <Navigate to="/" replace /> : <LoginScreen />} />
+      <Route path="/onboarding"    element={<RequireAuth><OnboardingScreen /></RequireAuth>} />
+      <Route path="/grocery"       element={<RequireAuth><GroceryScreen /></RequireAuth>} />
+      <Route path="/recipes"       element={<RequireAuth><RecipeScreen /></RequireAuth>} />
+      <Route path="/profile"       element={<RequireAuth><ProfileScreen /></RequireAuth>} />
+      <Route path="/join"          element={<JoinScreen />} />
+      <Route path="/privacy"       element={<PrivacyScreen />} />
+      <Route path="/data-deletion" element={<DataDeletionScreen />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+
+  /* ── 데스크톱 레이아웃 ─────────────────────────────────── */
+  if (isDesktop) {
+    return (
+      <div style={{
+        height: '100dvh', overflow: 'hidden',
+        display: 'flex', background: 'var(--bg-2)',
+        justifyContent: 'center',
+      }}>
+        {/* 앱 프레임: 최대 너비 제한 */}
+        <div style={{
+          display: 'flex', width: '100%', maxWidth: 1440,
+          height: '100%', background: 'var(--bg)',
+          boxShadow: '0 0 0 1px var(--line)',
+        }}>
+          {/* 사이드바: 인증된 메인 화면에서만 표시 */}
+          {showSidebar && <SideNav />}
+
+          {/* 콘텐츠 영역 */}
+          <div style={{
+            flex: 1, height: '100%', overflowY: 'auto', overflowX: 'hidden',
+            position: 'relative',
+          }}>
+            <WelcomeToast />
+            {routes}
+          </div>
+        </div>
+
+        <ChatSheet />
+        <RecipeSheet />
+        <FavoritesSheet />
+        <UpgradeSheet />
+        <GlobalToast />
+      </div>
+    );
+  }
+
+  /* ── 모바일 레이아웃 (기존) ────────────────────────────── */
   return (
     <div style={{ height: '100dvh', overflow: 'hidden', position: 'relative' }}>
       <div style={{ height: '100%', overflowY: 'auto' }}>
         <WelcomeToast />
-        <Routes>
-          {/* ── Smart home: auto-route by auth + onboarding state ── */}
-          <Route path="/" element={
-            !isAuthenticated                                                    ? <WelcomeScreen />                     :
-            !onboarded && !localStorage.getItem('cookingMaster_onboarded')     ? <Navigate to="/onboarding" replace /> :
-                                                                                  <Navigate to="/calendar" replace />
-          } />
-
-          {/* ── Calendar (no onboarding guard — navigate here directly after onboarding) ── */}
-          <Route path="/calendar" element={<RequireAuth><CalendarScreen /></RequireAuth>} />
-
-          {/* ── Public (redirect to / if already logged in) ── */}
-          <Route path="/welcome" element={isAuthenticated ? <Navigate to="/" replace /> : <WelcomeScreen />} />
-          <Route path="/login"   element={isAuthenticated ? <Navigate to="/" replace /> : <LoginScreen />} />
-
-          {/* ── Protected ── */}
-          <Route path="/onboarding" element={<RequireAuth><OnboardingScreen /></RequireAuth>} />
-          <Route path="/grocery"    element={<RequireAuth><GroceryScreen /></RequireAuth>} />
-          <Route path="/recipes"    element={<RequireAuth><RecipeScreen /></RequireAuth>} />
-          <Route path="/profile"    element={<RequireAuth><ProfileScreen /></RequireAuth>} />
-
-          {/* ── 가족 초대 수락 (공개) ── */}
-          <Route path="/join" element={<JoinScreen />} />
-
-          {/* ── Public static pages ── */}
-          <Route path="/privacy"       element={<PrivacyScreen />} />
-          <Route path="/data-deletion" element={<DataDeletionScreen />} />
-
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        {routes}
       </div>
 
       <ChatSheet />
