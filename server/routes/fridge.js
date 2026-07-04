@@ -71,11 +71,37 @@ router.post('/', requireAuth, async (req, res) => {
       const { image_base64, mime_type = 'image/jpeg' } = req.body;
       if (!image_base64) return res.status(400).json({ error: 'image_base64 required' });
 
-      const prompt = `이것은 마트 또는 배달 영수증 사진입니다.
-영수증에서 식재료(음식, 식품류)만 추출하세요. 비식품(생활용품 등)은 제외합니다.
-각 항목을 다음 JSON 형식으로 반환하세요:
-{"items":[{"name":"재료명","qty":"수량(예: 1개, 500g)","category":"육류|생선|해산물|채소|과일|유제품|곡물·기타|기타"}]}
-재료명은 한국어로 짧고 명확하게. 배열만 반환하고 설명 없이.`;
+      const prompt = `당신은 한국 마트·온라인 쇼핑·배달 영수증 전문 OCR 분석가입니다.
+제공된 이미지(영수증, 주문 내역서, 구매 목록 화면 등)에서 식재료와 식품을 최대한 많이 추출하세요.
+
+[필수 추출 대상]
+식재료·식품류: 육류, 어류, 해산물, 채소, 과일, 달걀, 두부, 유제품, 음료, 조미료, 소스, 오일, 가공식품, 냉동식품, 면·빵류, 쌀·잡곡, 통조림 등
+
+[제외 대상]
+비식품: 화장품, 세제, 생활용품, 종이류, 의류, 가전, 영수증 합계/할인/포인트 항목
+
+[추출 규칙]
+1. 상품명이 축약·잘린 경우 완전한 식품명으로 복원 (예: "국산닭가슴살(냉" → "닭가슴살", "有기농당근" → "당근")
+2. 같은 재료가 여러 줄에 걸쳐 나오면 하나로 합산
+3. 수량/무게가 명시된 경우 정확히 추출 (예: "500g", "2개", "1팩")
+4. 수량 정보가 없거나 불분명하면 "1개"로 기본 설정
+5. 재료명은 간결한 한국어로 (불필요한 브랜드명 제거 가능, 단 돼지고기/소고기/닭고기 부위는 유지)
+6. 카테고리를 정확히 분류할 것
+
+[카테고리 기준]
+- 육류: 소고기, 돼지고기, 닭고기, 오리고기, 양고기 등
+- 생선: 생선류, 건어물 (고등어, 연어, 갈치 등)
+- 해산물: 오징어, 새우, 조개, 게, 낙지 등
+- 채소: 모든 채소·나물·버섯류
+- 과일: 모든 과일류
+- 유제품: 우유, 치즈, 버터, 요거트, 크림 등
+- 곡물·기타: 쌀, 밀가루, 빵, 면류, 오일, 소스, 조미료, 통조림, 음료, 가공식품 등
+- 기타: 위에 해당 없는 식품
+
+[출력 형식 - 반드시 JSON만 출력, 설명·마크다운 코드블록 없이]
+{"items":[{"name":"재료명","qty":"수량","category":"카테고리"}]}
+
+인식 불가능하거나 식품이 전혀 없으면: {"items":[]}`;
 
       const visionRes = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
         method: 'POST',
@@ -85,7 +111,11 @@ router.post('/', requireAuth, async (req, res) => {
             { inlineData: { mimeType: mime_type, data: image_base64 } },
             { text: prompt },
           ]}],
-          generationConfig: { maxOutputTokens: 1024, temperature: 0.1, thinkingConfig: { thinkingBudget: 0 } },
+          generationConfig: {
+            maxOutputTokens: 2048,
+            temperature: 0,
+            thinkingConfig: { thinkingBudget: 1024 },
+          },
           safetySettings: [
             { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_NONE' },
             { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_NONE' },
@@ -95,19 +125,47 @@ router.post('/', requireAuth, async (req, res) => {
         }),
       });
 
-      if (!visionRes.ok) return res.status(502).json({ error: `AI 오류 (${visionRes.status})` });
+      if (!visionRes.ok) {
+        const errBody = await visionRes.json().catch(() => ({}));
+        console.error('[fridge OCR] Gemini error:', errBody);
+        return res.status(502).json({ error: `AI 오류 (${visionRes.status})` });
+      }
 
       const vdata = await visionRes.json();
-      const rawText = vdata.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) return res.status(422).json({ error: '영수증에서 식재료를 인식하지 못했습니다.' });
+      // thinking 모드에서는 parts[0]가 thinking 토큰일 수 있으므로 text part 탐색
+      const rawText = vdata.candidates?.[0]?.content?.parts
+        ?.find(p => p.text !== undefined)?.text ?? '';
 
-      const parsed = JSON.parse(jsonMatch[0]);
-      const items = (parsed.items ?? []).map(it => ({
-        ...it,
-        expires_at: defaultExpiresAt(it.category ?? '기타'),
-      }));
-      return res.json({ items });
+      // JSON 파싱 — 여러 패턴 순서대로 시도
+      let items = [];
+      const strategies = [
+        // 1) ```json ... ``` 코드블록
+        () => { const m = rawText.match(/```(?:json)?\s*([\s\S]*?)```/); return m && JSON.parse(m[1]); },
+        // 2) { "items": [...] } 오브젝트
+        () => { const m = rawText.match(/\{[\s\S]*"items"[\s\S]*\}/); return m && JSON.parse(m[0]); },
+        // 3) 첫 번째 [ ... ] 배열
+        () => { const m = rawText.match(/\[[\s\S]*\]/); return m && { items: JSON.parse(m[0]) }; },
+        // 4) 전체 텍스트를 직접 파싱
+        () => JSON.parse(rawText),
+      ];
+
+      for (const fn of strategies) {
+        try {
+          const parsed = fn();
+          if (parsed?.items) { items = parsed.items; break; }
+        } catch { /* 다음 전략 시도 */ }
+      }
+
+      const result = items
+        .filter(it => it?.name)
+        .map(it => ({
+          name:       it.name.trim(),
+          qty:        it.qty?.trim() || '1개',
+          category:   it.category ?? '기타',
+          expires_at: defaultExpiresAt(it.category ?? '기타'),
+        }));
+
+      return res.json({ items: result });
     }
 
     // ── 일괄 저장 모드 ──────────────────────────────────

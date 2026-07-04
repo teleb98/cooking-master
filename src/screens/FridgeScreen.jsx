@@ -2,6 +2,31 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import Icon from '../icons';
 
+/* 이미지를 Canvas로 리사이즈 + JPEG 압축 후 base64 반환 */
+async function compressImage(file, maxPx = 1920, quality = 0.88) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width  * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
 const TOKEN_KEY = 'cookingMaster_token';
 async function apiFetch(path, opts = {}) {
   const token = localStorage.getItem(TOKEN_KEY);
@@ -207,13 +232,16 @@ function AddSheet({ open, onClose, onAdd, accent }) {
   const [scanning, setScanning] = useState(false);
   const [scanItems, setScanItems] = useState(null);
   const [scanSelected, setScanSelected] = useState({});
-  const fileRef = useRef(null);
-  const nameRef = useRef(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const cameraRef  = useRef(null);
+  const galleryRef = useRef(null);
+  const nameRef    = useRef(null);
 
   useEffect(() => {
     if (open) {
       setName(''); setAmount('1'); setUnit('개'); setCategory('기타');
       setExpires(defaultExpiresAt('기타')); setScanItems(null); setScanSelected({});
+      setPreviewUrl(null);
       setTimeout(() => nameRef.current?.focus(), 150);
     }
   }, [open]);
@@ -232,18 +260,16 @@ function AddSheet({ open, onClose, onAdd, accent }) {
   const handleScanFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // 미리보기 생성
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
     setScanning(true);
     setScanItems(null);
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = ev => resolve(ev.target.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const base64 = await compressImage(file);
       const data = await apiFetch('/fridge', {
         method: 'POST',
-        body: JSON.stringify({ scan_receipt: true, image_base64: base64, mime_type: file.type }),
+        body: JSON.stringify({ scan_receipt: true, image_base64: base64, mime_type: 'image/jpeg' }),
       });
       if (data.items?.length) {
         setScanItems(data.items);
@@ -288,9 +314,9 @@ function AddSheet({ open, onClose, onAdd, accent }) {
             {scanItems !== null ? '인식 결과 확인' : '재료 추가'}
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {scanItems !== null && (
+            {(scanItems !== null || scanning) && (
               <button
-                onClick={() => setScanItems(null)}
+                onClick={() => { setScanItems(null); setPreviewUrl(null); setScanning(false); }}
                 style={{ fontSize: 12, color: accent, fontWeight: 600, padding: '4px 8px', borderRadius: 6, border: `1px solid ${accent}40`, background: `${accent}0D` }}
               >직접 입력</button>
             )}
@@ -301,37 +327,93 @@ function AddSheet({ open, onClose, onAdd, accent }) {
         <div className="no-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* 영수증 스캔 버튼 (직접입력 모드일 때만) */}
-          {!scanItems && (
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={scanning}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '13px 16px', borderRadius: 12,
-                border: `1.5px dashed ${accent}`,
-                background: `${accent}0D`, color: accent, fontWeight: 600, fontSize: 14,
-              }}
-            >
-              {scanning ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeOpacity="0.3"/>
-                  <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          {!scanItems && !scanning && (
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => cameraRef.current?.click()}
+                style={{
+                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  padding: '14px 10px', borderRadius: 14,
+                  border: `1.5px solid ${accent}`,
+                  background: `${accent}0D`, color: accent, fontWeight: 600, fontSize: 13,
+                }}
+              >
+                {Icon.camera(22)}
+                카메라 촬영
+              </button>
+              <button
+                onClick={() => galleryRef.current?.click()}
+                style={{
+                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                  padding: '14px 10px', borderRadius: 14,
+                  border: '1.5px solid var(--line)',
+                  background: 'var(--bg-2)', color: 'var(--ink-2)', fontWeight: 600, fontSize: 13,
+                }}
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="3"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <path d="M21 15l-5-5L5 21"/>
+                </svg>
+                앨범에서 선택
+              </button>
+            </div>
+          )}
+
+          {/* 스캔 중 — 미리보기 + 스피너 */}
+          {scanning && (
+            <div style={{
+              borderRadius: 14, overflow: 'hidden', position: 'relative',
+              border: '1px solid var(--line)',
+            }}>
+              {previewUrl && (
+                <img src={previewUrl} alt="영수증 미리보기" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', display: 'block' }} />
+              )}
+              <div style={{
+                position: previewUrl ? 'absolute' : 'relative',
+                inset: 0, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: 10,
+                background: previewUrl ? 'rgba(0,0,0,0.55)' : 'var(--bg-2)',
+                padding: previewUrl ? 0 : '28px 0',
+                minHeight: previewUrl ? undefined : 100,
+              }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke={previewUrl ? '#fff' : 'var(--line)'} strokeWidth="2.5"/>
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke={accent} strokeWidth="2.5" strokeLinecap="round">
                     <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite"/>
                   </path>
                 </svg>
-              ) : Icon.camera(18)}
-              {scanning ? '영수증 인식 중…' : '영수증 사진으로 자동 등록'}
-            </button>
+                <span style={{ fontSize: 13, fontWeight: 600, color: previewUrl ? '#fff' : 'var(--ink-2)' }}>
+                  AI가 재료를 인식하는 중…
+                </span>
+              </div>
+            </div>
           )}
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleScanFile} />
+
+          {/* 숨겨진 파일 입력: 카메라 */}
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={handleScanFile} />
+          {/* 숨겨진 파일 입력: 갤러리 */}
+          <input ref={galleryRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleScanFile} />
 
           {/* OCR 결과 리뷰 */}
           {scanItems !== null && (
             <div>
-              <div style={{ fontSize: 12, color: 'var(--ink-3)', marginBottom: 4 }}>
-                {scanItems.length > 0
-                  ? `${scanItems.length}개 재료 인식됨 · 수량을 탭하면 직접 수정할 수 있어요`
-                  : '영수증에서 식재료를 인식하지 못했습니다'}
+              {/* 미리보기 썸네일 (결과 위) */}
+              {previewUrl && (
+                <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 4 }}>
+                  <img src={previewUrl} alt="스캔 이미지" style={{ width: '100%', maxHeight: 120, objectFit: 'cover', display: 'block' }} />
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <div style={{ fontSize: 12, color: 'var(--ink-3)' }}>
+                  {scanItems.length > 0
+                    ? `${scanItems.length}개 재료 인식됨 · 수량 칩을 탭해서 수정하세요`
+                    : '식재료를 인식하지 못했습니다 — 다시 시도하거나 직접 입력하세요'}
+                </div>
+                <button
+                  onClick={() => { setScanItems(null); setPreviewUrl(null); }}
+                  style={{ fontSize: 11, color: accent, fontWeight: 600, whiteSpace: 'nowrap', marginLeft: 8, flexShrink: 0 }}
+                >다시 스캔</button>
               </div>
               {scanItems.map((it, i) => (
                 <ScanItemRow
@@ -351,8 +433,8 @@ function AddSheet({ open, onClose, onAdd, accent }) {
                 </button>
               )}
               {scanItems.length === 0 && (
-                <button onClick={() => setScanItems(null)} style={{
-                  marginTop: 14, width: '100%', padding: '14px 0', borderRadius: 12,
+                <button onClick={() => { setScanItems(null); setPreviewUrl(null); }} style={{
+                  marginTop: 8, width: '100%', padding: '14px 0', borderRadius: 12,
                   background: 'var(--bg-2)', color: 'var(--ink-2)', fontSize: 14, fontWeight: 600,
                 }}>직접 입력으로 전환</button>
               )}
