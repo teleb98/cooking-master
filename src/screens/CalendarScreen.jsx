@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
 import { useAuth } from '../context/AuthContext';
 import { useBackHandler } from '../hooks/useBackHandler';
+import { useDesktop } from '../hooks/useDesktop';
 import Icon from '../icons';
 
 const TOKEN_KEY = 'cookingMaster_token';
@@ -333,8 +334,18 @@ export default function CalendarScreen() {
     setViewMode('week');
   }, []);
 
+  const isDesktop = useDesktop();
   const dUntil = daysUntil(family.shopping_day);
   const totalMeals = Object.values(meals).filter(m => m.menu_name).length;
+
+  // 일별 칼로리 합산 (데스크톱 영양 패널용)
+  const dayKcals = useMemo(() => weekDates.map(d => {
+    const ds = toDateStr(d);
+    return MEAL_TYPES.reduce((sum, mt) => sum + (meals[`${ds}_${mt.key}`]?.kcal ?? 0), 0);
+  }), [weekDates, meals]);
+  const filledDays = dayKcals.filter(k => k > 0).length;
+  const avgKcal    = filledDays > 0 ? Math.round(dayKcals.reduce((s, k) => s + k, 0) / filledDays) : 0;
+  const TARGET_KCAL = 1750;
 
   return (
     <div style={{
@@ -554,6 +565,90 @@ export default function CalendarScreen() {
                 </div>
               )}
             </div>
+
+            {/* 데스크톱 전용: 주간 영양 요약 패널 */}
+            {isDesktop && (
+              <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* 요약 스탯 카드 3개 */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+                  {[
+                    { label: '이번 주 입력', value: `${totalMeals} / 21`, sub: '끼니 완성', icon: '📋' },
+                    { label: '평균 칼로리', value: avgKcal > 0 ? `${avgKcal.toLocaleString()} kcal` : '—', sub: `목표 ${TARGET_KCAL.toLocaleString()} kcal`, icon: '🔥' },
+                    { label: '입력 완성도', value: `${Math.round((totalMeals / 21) * 100)}%`, sub: `${filledDays}일 / 7일 식단`, icon: '✅' },
+                  ].map(card => (
+                    <div key={card.label} style={{
+                      background: 'var(--surface)', border: '1px solid var(--line)',
+                      borderRadius: 14, padding: '14px 16px',
+                    }}>
+                      <div style={{ fontSize: 18, marginBottom: 6 }}>{card.icon}</div>
+                      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginBottom: 4 }}>{card.label}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--ink)', fontFamily: 'var(--font-mono)', letterSpacing: '-0.02em' }}>{card.value}</div>
+                      <div style={{ fontSize: 10, color: 'var(--ink-4)', marginTop: 3 }}>{card.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 일별 칼로리 바 차트 */}
+                <div style={{
+                  background: 'var(--surface)', border: '1px solid var(--line)',
+                  borderRadius: 14, padding: '16px 16px 12px',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', marginBottom: 14, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Daily Calories</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 8 }}>
+                    {weekDates.map((d, i) => {
+                      const kcal = dayKcals[i];
+                      const isToday = toDateStr(d) === toDateStr(today);
+                      const pct = Math.min(100, (kcal / (TARGET_KCAL * 1.2)) * 100);
+                      const barColor = kcal === 0
+                        ? 'var(--line)'
+                        : kcal < 1400 ? 'var(--ink-3)'
+                        : kcal <= 1950 ? accent
+                        : 'var(--warn)';
+                      return (
+                        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                          {/* kcal 숫자 */}
+                          <div style={{
+                            fontSize: 9.5, fontFamily: 'var(--font-mono)', fontWeight: 600,
+                            color: kcal === 0 ? 'var(--ink-4)' : isToday ? accent : 'var(--ink-2)',
+                            minHeight: 14,
+                          }}>
+                            {kcal > 0 ? kcal.toLocaleString() : '—'}
+                          </div>
+                          {/* 바 컨테이너 */}
+                          <div style={{ width: '100%', height: 72, background: 'var(--bg-2)', borderRadius: 8, overflow: 'hidden', display: 'flex', alignItems: 'flex-end' }}>
+                            <div style={{
+                              width: '100%', height: `${pct}%`,
+                              background: isToday ? accent : barColor,
+                              borderRadius: 8,
+                              transition: 'height 400ms ease',
+                              opacity: kcal === 0 ? 0.3 : 1,
+                            }} />
+                          </div>
+                          {/* 요일/날짜 */}
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 700, color: isToday ? accent : 'var(--ink-3)' }}>{DAYS_KR[i]}</div>
+                            <div style={{ fontSize: 9, color: 'var(--ink-4)', fontFamily: 'var(--font-mono)' }}>{d.getDate()}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* 목표선 레이블 */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--line-soft)' }}>
+                    <div style={{ width: 20, height: 2, borderRadius: 1, background: `${accent}55` }} />
+                    <span style={{ fontSize: 10, color: 'var(--ink-4)' }}>목표 {TARGET_KCAL.toLocaleString()} kcal 기준</span>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
+                      <span style={{ fontSize: 10, color: 'var(--ink-4)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: accent }} />1,400–1,950
+                      </span>
+                      <span style={{ fontSize: 10, color: 'var(--ink-4)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--warn)' }} />초과
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           /* ── 월별 뷰 ── */
@@ -626,18 +721,18 @@ export default function CalendarScreen() {
       </div>
 
       {/* 장바구니 배너 + AI FAB */}
-      <div style={{ padding: '6px 14px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ padding: isDesktop ? '14px 14px 18px' : '6px 14px 14px', display: 'flex', flexDirection: isDesktop ? 'row' : 'column', gap: 10 }}>
         <button onClick={() => navigate('/grocery')} style={{
           background: 'var(--surface)', border: '1px solid var(--line)',
-          borderRadius: 14, padding: '12px 14px',
+          borderRadius: 14, padding: isDesktop ? '14px 18px' : '12px 14px',
           display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left',
-          boxShadow: 'var(--shadow-sm)',
+          boxShadow: 'var(--shadow-sm)', flex: isDesktop ? 1 : undefined,
         }}>
           <div style={{
             width: 38, height: 38, borderRadius: 10, background: 'var(--accent-soft)',
-            color: 'var(--accent-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--accent-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
           }}>{Icon.cart(20)}</div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', whiteSpace: 'nowrap' }}>
               이번 주 장바구니 · {totalMeals}개 식단
             </div>
@@ -645,17 +740,18 @@ export default function CalendarScreen() {
           </div>
           <div style={{
             background: 'var(--accent)', color: '#fff', fontSize: 11, fontWeight: 700,
-            padding: '6px 10px', borderRadius: 999, fontFamily: 'var(--font-mono)',
+            padding: '6px 10px', borderRadius: 999, fontFamily: 'var(--font-mono)', flexShrink: 0,
           }}>D-{dUntil}</div>
         </button>
 
         <button onClick={() => setChatOpen(true)} style={{
-          background: accent, color: '#fff', borderRadius: 16, padding: '14px 18px',
+          background: accent, color: '#fff', borderRadius: 16,
+          padding: isDesktop ? '14px 20px' : '14px 18px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          boxShadow: `0 8px 22px ${accent}4D`,
+          boxShadow: `0 8px 22px ${accent}4D`, flex: isDesktop ? 1 : undefined,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ background: 'rgba(255,255,255,0.18)', width: 30, height: 30, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ background: 'rgba(255,255,255,0.18)', width: 30, height: 30, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               {Icon.spark(16)}
             </div>
             <div style={{ textAlign: 'left' }}>
@@ -668,15 +764,15 @@ export default function CalendarScreen() {
 
         <button onClick={() => setFavoritesOpen(true)} style={{
           background: 'var(--surface)', border: '1px solid var(--line)',
-          borderRadius: 16, padding: '14px 18px',
+          borderRadius: 16, padding: isDesktop ? '14px 20px' : '14px 18px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          boxShadow: 'var(--shadow-sm)',
+          boxShadow: 'var(--shadow-sm)', flex: isDesktop ? 1 : undefined,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               width: 30, height: 30, borderRadius: 10,
               background: `${accent}18`, color: accent,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}>
               {Icon.heart(16)}
             </div>
