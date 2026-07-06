@@ -27,7 +27,7 @@ if (!HAS_DIST) {
   }));
 }
 
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 
 // ── API ─────────────────────────────────────────────────
 app.use('/api/auth',    authRouter);

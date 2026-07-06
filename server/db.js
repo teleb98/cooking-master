@@ -316,14 +316,18 @@ async function createSqliteAdapter() {
 
   await seedRecipesIfEmpty(sqlite);
 
-  // $1 $2 … → ?
-  const toSQLite = sql => sql.replace(/\$\d+/g, '?');
+  // $1 $2 … → ? (repeated $N are expanded with the same value each time)
+  const toSQLite = (sql, p) => {
+    const params = [];
+    const converted = sql.replace(/\$(\d+)/g, (_, n) => { params.push(p[+n - 1]); return '?'; });
+    return { converted, params };
+  };
 
   console.log('[db] connected to SQLite (local dev)');
   return {
-    getOne:  (sql, p = []) => sqlite.prepare(toSQLite(sql)).get(...p) ?? null,
-    getMany: (sql, p = []) => sqlite.prepare(toSQLite(sql)).all(...p),
-    run:     (sql, p = []) => { sqlite.prepare(toSQLite(sql)).run(...p); },
+    getOne:  (sql, p = []) => { const { converted, params } = toSQLite(sql, p); return sqlite.prepare(converted).get(...params) ?? null; },
+    getMany: (sql, p = []) => { const { converted, params } = toSQLite(sql, p); return sqlite.prepare(converted).all(...params); },
+    run:     (sql, p = []) => { const { converted, params } = toSQLite(sql, p); sqlite.prepare(converted).run(...params); },
   };
 }
 
