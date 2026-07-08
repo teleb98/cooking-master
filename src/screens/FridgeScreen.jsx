@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Icon from '../icons';
 
@@ -578,6 +579,7 @@ function AddSheet({ open, onClose, onAdd, accent }) {
 /* ── 메인 화면 ───────────────────────────────────────── */
 export default function FridgeScreen() {
   const { accent, showToast } = useApp();
+  const navigate = useNavigate();
   const [items, setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
@@ -696,6 +698,34 @@ export default function FridgeScreen() {
                 </div>
               </div>
             )}
+
+            {/* 레시피 연결 배너 */}
+            <button
+              onClick={() => navigate('/recipes')}
+              style={{
+                width: '100%', marginBottom: 14,
+                background: `linear-gradient(135deg, ${accent}14 0%, ${accent}06 100%)`,
+                border: `1px solid ${accent}30`, borderRadius: 14,
+                padding: '13px 16px', textAlign: 'left',
+                display: 'flex', alignItems: 'center', gap: 12,
+              }}
+            >
+              <div style={{
+                width: 38, height: 38, borderRadius: 10, background: accent, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18,
+              }}>🍳</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', marginBottom: 2 }}>
+                  냉장고 재료로 만들 수 있는 레시피
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>
+                  {items.length}가지 재료 기반으로 레시피를 필터링해 드려요
+                </div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink-4)" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </button>
 
             {/* 카테고리별 그룹 */}
             {Object.entries(byCategory).map(([cat, catItems]) => (

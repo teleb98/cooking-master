@@ -1,8 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useFamily } from '../context/FamilyContext';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../icons';
+
+// 냉장고 재료명 정규화 (공백 제거, 소문자)
+function normIng(name) { return name.trim().replace(/\s+/g, '').toLowerCase(); }
+function fridgeHas(fridgeItems, ingName) {
+  const n = normIng(ingName);
+  return fridgeItems.some(f => { const fn = normIng(f.name); return fn === n || fn.includes(n) || n.includes(fn); });
+}
+function getCoverage(recipe, fridgeItems) {
+  const ings = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  if (!ings.length || !fridgeItems.length) return null;
+  const have = ings.filter(ing => fridgeHas(fridgeItems, ing.name)).length;
+  return { have, total: ings.length };
+}
 
 const TOKEN_KEY = 'cookingMaster_token';
 
@@ -62,16 +76,19 @@ function Chip({ children, active, accent, onClick }) {
   );
 }
 
-function RecipeCard({ recipe, accent, onOpen }) {
+function RecipeCard({ recipe, accent, onOpen, coverage }) {
   const emoji = recipeEmoji(recipe.name);
   const totalTime = (recipe.prep_time ?? 0) + (recipe.cook_time ?? 0);
   const ingCount  = Array.isArray(recipe.ingredients) ? recipe.ingredients.length : 0;
+  const canMake   = coverage && coverage.have === coverage.total && coverage.total > 0;
+  const partial   = coverage && coverage.have > 0 && !canMake;
   return (
     <button
       onClick={onOpen}
       style={{
         background: 'var(--surface)', borderRadius: 14,
-        border: '1px solid var(--line)', padding: '13px 14px',
+        border: canMake ? `1.5px solid #4E9B5F` : '1px solid var(--line)',
+        padding: '13px 14px',
         display: 'flex', alignItems: 'center', gap: 12,
         textAlign: 'left', width: '100%',
         transition: 'opacity 100ms',
@@ -79,7 +96,7 @@ function RecipeCard({ recipe, accent, onOpen }) {
     >
       <div style={{
         width: 46, height: 46, borderRadius: 12,
-        background: 'var(--bg-2)', flexShrink: 0,
+        background: canMake ? 'rgba(78,155,95,0.10)' : 'var(--bg-2)', flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 22,
       }}>
@@ -94,13 +111,19 @@ function RecipeCard({ recipe, accent, onOpen }) {
           {recipe.baby && (
             <span style={{ fontSize: 9.5, padding: '2px 7px', borderRadius: 4, background: 'var(--baby-soft)', color: 'var(--baby-ink)', fontWeight: 600, flexShrink: 0 }}>이유식</span>
           )}
+          {canMake && (
+            <span style={{ fontSize: 9.5, padding: '2px 7px', borderRadius: 4, background: 'rgba(78,155,95,0.15)', color: '#4E9B5F', fontWeight: 700, flexShrink: 0 }}>🧊 바로 만들 수 있어요</span>
+          )}
+          {partial && (
+            <span style={{ fontSize: 9.5, padding: '2px 7px', borderRadius: 4, background: 'rgba(78,155,95,0.08)', color: '#4E9B5F', fontWeight: 600, flexShrink: 0 }}>냉장고 {coverage.have}/{coverage.total}가지</span>
+          )}
           {(recipe.tags ?? []).slice(0, 2).map(t => (
             <span key={t} style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{t}</span>
           ))}
           {totalTime > 0 && (
             <span style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>⏱ {totalTime}분</span>
           )}
-          {ingCount > 0 && (
+          {!coverage && ingCount > 0 && (
             <span style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>재료 {ingCount}가지</span>
           )}
         </div>
@@ -117,11 +140,14 @@ export default function RecipeScreen() {
   const { accent, setRecipe } = useApp();
   const { family } = useFamily();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [recipes, setRecipes]     = useState([]);
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState('');
   const [activeTag, setActiveTag] = useState(null);
   const [babyOnly, setBabyOnly]   = useState(false);
+  const [fridgeOnly, setFridgeOnly] = useState(false);
+  const [fridgeItems, setFridgeItems] = useState([]);
 
   const [showForm, setShowForm]   = useState(false);
   const [formName, setFormName]   = useState('');
@@ -138,6 +164,12 @@ export default function RecipeScreen() {
   };
 
   useEffect(() => { loadRecipes(); }, []);
+
+  useEffect(() => {
+    apiFetch('/fridge')
+      .then(d => setFridgeItems(d.items ?? []))
+      .catch(() => {});
+  }, []);
 
   const handleCreateRecipe = async () => {
     const name = formName.trim();
@@ -165,16 +197,31 @@ export default function RecipeScreen() {
     return [...tagSet].sort();
   }, [recipes]);
 
+  const coverageMap = useMemo(() => {
+    if (!fridgeItems.length) return {};
+    const map = {};
+    for (const r of recipes) {
+      const cov = getCoverage(r, fridgeItems);
+      if (cov) map[r.name] = cov;
+    }
+    return map;
+  }, [recipes, fridgeItems]);
+
   const filtered = useMemo(() => recipes.filter(r => {
     if (search && !r.name.includes(search) && !(r.tags ?? []).some(t => t.includes(search))) return false;
     if (activeTag && !(r.tags ?? []).includes(activeTag)) return false;
     if (babyOnly && !r.baby) return false;
+    if (fridgeOnly) {
+      const cov = coverageMap[r.name];
+      if (!cov || cov.have === 0) return false;
+    }
     return true;
-  }), [recipes, search, activeTag, babyOnly]);
+  }), [recipes, search, activeTag, babyOnly, fridgeOnly, coverageMap]);
 
   const handleTagClick = (tag) => {
     setActiveTag(t => t === tag ? null : tag);
     setBabyOnly(false);
+    setFridgeOnly(false);
   };
 
   return (
@@ -309,15 +356,22 @@ export default function RecipeScreen() {
       {/* 필터 칩 */}
       <div className="no-scrollbar" style={{ padding: '0 18px 12px', overflowX: 'auto', display: 'flex', gap: 7 }}>
         <Chip
-          active={!activeTag && !babyOnly}
+          active={!activeTag && !babyOnly && !fridgeOnly}
           accent={accent}
-          onClick={() => { setActiveTag(null); setBabyOnly(false); }}
-        >전체 {!activeTag && !babyOnly && recipes.length > 0 ? `${recipes.length}` : ''}</Chip>
+          onClick={() => { setActiveTag(null); setBabyOnly(false); setFridgeOnly(false); }}
+        >전체 {!activeTag && !babyOnly && !fridgeOnly && recipes.length > 0 ? `${recipes.length}` : ''}</Chip>
+        {fridgeItems.length > 0 && (
+          <Chip
+            active={fridgeOnly}
+            accent="#4E9B5F"
+            onClick={() => { setFridgeOnly(f => !f); setActiveTag(null); setBabyOnly(false); }}
+          >🧊 냉장고 재료로</Chip>
+        )}
         {family.has_baby && (
           <Chip
             active={babyOnly}
             accent={accent}
-            onClick={() => { setBabyOnly(b => !b); setActiveTag(null); }}
+            onClick={() => { setBabyOnly(b => !b); setActiveTag(null); setFridgeOnly(false); }}
           >🥣 이유식</Chip>
         )}
         {allTags.map(tag => (
@@ -353,6 +407,7 @@ export default function RecipeScreen() {
                 key={r.name}
                 recipe={r}
                 accent={accent}
+                coverage={coverageMap[r.name] ?? null}
                 onOpen={() => setRecipe({ name: r.name, userId: r.user_id })}
               />
             ))}

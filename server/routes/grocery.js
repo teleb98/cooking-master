@@ -19,8 +19,29 @@ function categorize(name) {
 router.post('/', requireAuth, async (req, res) => {
   const userId = req.userId;
   try {
-    const { week_start } = req.body ?? {};
+    const { week_start, items: manualItems } = req.body ?? {};
     if (!week_start) return res.status(400).json({ error: 'week_start required' });
+
+    // ── 레시피 재료 수동 추가 모드 ─────────────────────────────
+    if (Array.isArray(manualItems) && manualItems.length > 0) {
+      const existing = await db.getMany(
+        'SELECT name FROM grocery_items WHERE user_id = $1 AND week_start = $2',
+        [userId, week_start],
+      );
+      const existingNames = new Set(existing.map(e => e.name.trim().toLowerCase()));
+      let added = 0;
+      for (const item of manualItems) {
+        const name = item.name?.trim();
+        if (!name || existingNames.has(name.toLowerCase())) continue;
+        await db.run(
+          `INSERT INTO grocery_items (id, user_id, week_start, name, qty, category, for_baby, is_bought, menu_count)
+           VALUES ($1,$2,$3,$4,$5,$6,0,0,1)`,
+          [randomUUID(), userId, week_start, name, item.qty ?? '', item.category ?? categorize(name)],
+        );
+        added++;
+      }
+      return res.json({ added });
+    }
 
     const weekEnd = new Date(week_start);
     weekEnd.setUTCDate(weekEnd.getUTCDate() + 6);

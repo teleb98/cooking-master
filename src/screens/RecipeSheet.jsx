@@ -1,10 +1,24 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { useFamily } from '../context/FamilyContext';
 import { Sheet } from '../components/Sheet';
 import Icon from '../icons';
 import { DAYS_KR, MEAL_TYPES } from '../data';
+
+function normIng(name) { return name.trim().replace(/\s+/g, '').toLowerCase(); }
+function fridgeHas(fridgeItems, ingName) {
+  const n = normIng(ingName);
+  return fridgeItems.some(f => { const fn = normIng(f.name); return fn === n || fn.includes(n) || n.includes(fn); });
+}
+function getWeekStart() {
+  const today = new Date();
+  const diff = today.getDay() === 0 ? -6 : 1 - today.getDay();
+  const mon = new Date(today);
+  mon.setDate(today.getDate() + diff);
+  return mon.toISOString().slice(0, 10);
+}
 
 const TOKEN_KEY = 'cookingMaster_token';
 
@@ -143,6 +157,7 @@ export default function RecipeSheet() {
   const { recipe, setRecipe, accent, setReplaceSlot, bumpMealVersion, markLocalMealChange, showToast } = useApp();
   const { user } = useAuth();
   const { family, saveProfile } = useFamily();
+  const navigate = useNavigate();
 
   const [info, setInfo]           = useState(null);
   const [baseLoading, setBaseLoading] = useState(false);
@@ -153,6 +168,8 @@ export default function RecipeSheet() {
   const [pickDate, setPickDate]       = useState(null);
   const [pickMeal, setPickMeal]       = useState(null);
   const [adding, setAdding]           = useState(false);
+  const [fridgeItems, setFridgeItems] = useState([]);
+  const [addingToGrocery, setAddingToGrocery] = useState(false);
 
   const name = recipe?.name ?? null;
   const [baseError, setBaseError] = useState(false);
@@ -184,6 +201,7 @@ export default function RecipeSheet() {
     if (!name) { setInfo(null); setBaseError(false); return; }
     setAddMode(false); setPickDate(null); setPickMeal(null);
     fetchInfo(name);
+    apiFetch('/fridge').then(d => setFridgeItems(d.items ?? [])).catch(() => {});
   }, [name, fetchInfo]);
 
   /* 조리법 AI 생성 */
@@ -244,6 +262,28 @@ export default function RecipeSheet() {
     } catch {
       showToast('식단 추가에 실패했어요', 'error');
       setAdding(false);
+    }
+  };
+
+  const handleAddMissingToGrocery = async () => {
+    const missing = (info?.ingredients ?? []).filter(ing => !fridgeHas(fridgeItems, ing.name));
+    if (!missing.length) return;
+    setAddingToGrocery(true);
+    try {
+      const data = await apiFetch('/grocery', {
+        method: 'POST',
+        body: JSON.stringify({
+          week_start: getWeekStart(),
+          items: missing.map(ing => ({ name: ing.name, qty: ing.qty ?? '' })),
+        }),
+      });
+      showToast(`${data.added}개 재료를 장보기에 추가했어요`, 'success');
+      setRecipe(null);
+      navigate('/grocery');
+    } catch {
+      showToast('장보기 추가에 실패했어요', 'error');
+    } finally {
+      setAddingToGrocery(false);
     }
   };
 
@@ -324,17 +364,49 @@ export default function RecipeSheet() {
             <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--line)', overflow: 'hidden' }}>
               {(info.ingredients ?? []).length === 0 ? (
                 <div style={{ padding: '14px', color: 'var(--ink-3)', fontSize: 13 }}>재료 정보 없음</div>
-              ) : (info.ingredients ?? []).map((ing, idx) => (
-                <div key={idx} style={{
-                  padding: '11px 14px', fontSize: 13, color: 'var(--ink)',
-                  borderTop: idx === 0 ? 'none' : '1px solid var(--line-soft)',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                }}>
-                  <span>{ing.name}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-3)' }}>{ing.qty}</span>
-                </div>
-              ))}
+              ) : (info.ingredients ?? []).map((ing, idx) => {
+                const inFridge = fridgeItems.length > 0 && fridgeHas(fridgeItems, ing.name);
+                return (
+                  <div key={idx} style={{
+                    padding: '11px 14px', fontSize: 13,
+                    color: inFridge ? 'var(--ink-3)' : 'var(--ink)',
+                    borderTop: idx === 0 ? 'none' : '1px solid var(--line-soft)',
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    background: inFridge ? 'rgba(78,155,95,0.04)' : 'transparent',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {fridgeItems.length > 0 && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: inFridge ? '#4E9B5F' : 'var(--ink-4)', flexShrink: 0 }}>
+                          {inFridge ? '✓' : '✕'}
+                        </span>
+                      )}
+                      <span style={{ textDecoration: inFridge ? 'line-through' : 'none' }}>{ing.name}</span>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ink-3)' }}>{ing.qty}</span>
+                  </div>
+                );
+              })}
             </div>
+            {/* 부족 재료 장보기 추가 버튼 */}
+            {fridgeItems.length > 0 && (() => {
+              const missing = (info.ingredients ?? []).filter(ing => !fridgeHas(fridgeItems, ing.name));
+              if (!missing.length) return null;
+              return (
+                <button
+                  onClick={handleAddMissingToGrocery}
+                  disabled={addingToGrocery}
+                  style={{
+                    marginTop: 8, width: '100%', padding: '12px 0', borderRadius: 12,
+                    background: 'var(--surface)', border: `1.5px solid ${accent}`,
+                    color: accent, fontSize: 13, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    opacity: addingToGrocery ? 0.6 : 1,
+                  }}
+                >
+                  🛒 {addingToGrocery ? '추가 중…' : `부족한 재료 ${missing.length}개 장보기에 추가`}
+                </button>
+              );
+            })()}
 
             {/* 조리법 */}
             <SectionLabel kr="조리법" en="Instructions" />
