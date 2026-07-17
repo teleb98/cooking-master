@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, HUB_LOGIN } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 
 /* ── 소셜 로그인 공급자 아이콘 ──────────────────────────────── */
@@ -191,6 +191,25 @@ export default function LoginScreen() {
       <div style={{ width: '100%', maxWidth: 400, padding: '0 24px 8px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         {/* 에러 배너 */}
         {errorMsg && <ErrorBanner msg={errorMsg} onClose={() => setErrorMsg(null)} />}
+
+        {/* rarebook 통합 계정 — 한 번 로그인하면 서점·독서 서재·쿠킹 모두 사용 */}
+        <button
+          onClick={() => { window.location.href = HUB_LOGIN(); }}
+          style={{
+            width: '100%', height: 54, borderRadius: 14,
+            background: 'var(--accent)', color: '#fff',
+            border: 'none', fontSize: 14, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            boxShadow: '0 6px 18px rgba(200,101,74,0.30)', cursor: 'pointer',
+          }}
+        >
+          📚 rarebook 계정으로 계속
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0' }}>
+          <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+          <span style={{ fontSize: 11, color: 'var(--ink-4)' }}>또는 소셜 계정</span>
+          <div style={{ flex: 1, height: 1, background: 'var(--line)' }} />
+        </div>
 
         {PROVIDERS.map((p) => {
           const isConfigured = configured === null ? null : (configured[p.id] ?? false);
