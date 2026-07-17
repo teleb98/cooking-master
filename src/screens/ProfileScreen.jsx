@@ -7,6 +7,7 @@ import { useFamily, getChildCategory } from '../context/FamilyContext';
 const PLAN_LIMITS = { free: { generate: 1, chat: 5 }, premium: { generate: 4, chat: 30 } };
 import { FOOD_CHIPS, ALLERGY_CHIPS } from '../data';
 import Icon from '../icons';
+import FamilySwitcher from '../components/FamilySwitcher';
 
 const FOOD_CHIPS_SET = new Set(FOOD_CHIPS);
 
@@ -693,6 +694,11 @@ export default function ProfileScreen() {
           </button>
         </div>
       )}
+
+      {/* rarebook 패밀리 서비스 */}
+      <div style={{ background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--line)', padding: 16, marginBottom: 14 }}>
+        <FamilySwitcher current="cooking" />
+      </div>
 
       {/* 내 플랜 카드 */}
       {planInfo && (() => {

@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import Icon from '../icons';
+import FamilySwitcher from './FamilySwitcher';
 
 const TABS = [
   { path: '/calendar', label: '식단',  labelEn: 'Meal Plan', icon: s => Icon.calendar(s) },
@@ -97,6 +98,11 @@ export default function SideNav() {
             <div style={{ fontSize: 10, color: accent + 'AA', letterSpacing: '0.05em', lineHeight: 1.2 }}>Meal AI Chat</div>
           </div>
         </button>
+
+        <div style={{ margin: '14px 4px 12px', height: 1, background: 'var(--line-soft)' }} />
+
+        {/* rarebook 패밀리 서비스 */}
+        <FamilySwitcher current="cooking" compact />
       </div>
 
       {/* ── 사용자 정보 ────────────────────── */}
