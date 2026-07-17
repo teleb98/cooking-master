@@ -16,11 +16,11 @@ describe('GET /api/recipes', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns the 100 seeded shared recipes', async () => {
+  it('returns the 190 seeded shared recipes', async () => {
     const auth = await authedUser();
     const res = await request(app).get('/api/recipes').set(auth);
     expect(res.status).toBe(200);
-    expect(res.body.recipes.length).toBe(100);
+    expect(res.body.recipes.length).toBe(190);
     expect(res.body.recipes.every(r => r.user_id === null)).toBe(true);
   });
 
