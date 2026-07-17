@@ -1,13 +1,15 @@
+/* 중립색(배경·라인·잉크)은 rarebook 공용 토큰(웜 종이·책)에 정렬 — pkl 과 일치.
+ * 액센트(Terracotta)와 다크모드는 쿠킹마스터 고유 아이덴티티로 유지. 참고: /rarebook-tokens.css */
 :root {
-  --bg: #FAF7F2;
+  --bg: #F5F1E8;
   --bg-2: #F2EDE4;
   --surface: #FFFFFF;
-  --line: #E7E1D6;
+  --line: #E6DDC9;
   --line-soft: #EFEAE0;
-  --ink: #2A2A28;
-  --ink-2: #4A4742;
-  --ink-3: #7A7670;
-  --ink-4: #A8A39A;
+  --ink: #1C1712;
+  --ink-2: #3D3529;
+  --ink-3: #7A6E5F;
+  --ink-4: #B5AA9A;
 
   --accent: #C8654A;
   --accent-soft: #F1D9CF;
