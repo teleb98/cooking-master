@@ -1,6 +1,6 @@
 {
-  "name": "Cooking Master · 쿠킹마스터",
-  "short_name": "쿠킹마스터",
+  "name": "rarebook 부엌",
+  "short_name": "부엌",
   "description": "온 가족의 식단을 스마트하게 — AI 식단 계획 · 이유식 분기 · 장보기 목록",
   "start_url": "/?source=pwa",
   "id": "cooking-master-pwa",
