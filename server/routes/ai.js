@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { checkAiLimit, incrementAiUsage } from '../_limits.js';
+import { getHealthSignalForUser } from './lifestyle.js';
 
 const router = Router();
 const GEMINI_MODEL = 'gemini-2.5-flash';
@@ -353,6 +354,12 @@ router.post('/generate-plan', requireAuth, async (req, res) => {
     const likedHintsLine = likedHints.length > 0 ? `- 선호 재료·스타일 (관련 메뉴 우선): ${likedHints.join(', ')}` : '';
     const noPrefsLine    = !likedMenusLine && !likedHintsLine ? '- 취향: 제한 없음' : '';
 
+    // 최근 식단의 건강 지향 신호 — 높으면 건강식/다이어트/샐러드 메뉴 비중을 더 높여 배치
+    const healthSignal = await getHealthSignalForUser(userId);
+    const healthHintLine = healthSignal.label === 'high'
+      ? '- 건강식 지향: 최근 건강식·다이어트·샐러드 메뉴를 자주 선택했습니다. 이번 식단도 건강식/샐러드/저칼로리 메뉴 비중을 평소보다 높여 배치하세요.'
+      : '';
+
     const userPrompt = `다음 조건으로 ${dates[0]}부터 ${dates[13]}까지 2주 식단을 생성하세요.
 
 ## 중요: 각 레시피는 완전한 한 끼 식사 기준 칼로리입니다
@@ -366,6 +373,7 @@ ${childrenDesc ? `- 자녀 구성: ${childrenDesc}` : ''}
 ${likedMenusLine}
 ${likedHintsLine}
 ${noPrefsLine}
+${healthHintLine}
 - 알레르기·피해야 할 재료: ${allergyText}
 ${hasBaby  ? '- 이유식기 영아 포함: 이유식 가능(이유식가능) 메뉴 적극 포함, 자극적 양념 최소화' : ''}
 ${hasChild ? '- 어린이 포함: 매운 음식 최소화, 영양 균형 강조 (칼슘·철분 풍부 식품 포함)' : ''}

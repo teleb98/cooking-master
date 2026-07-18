@@ -12,6 +12,7 @@ import groceryRouter from './routes/grocery.js';
 import fridgeRouter  from './routes/fridge.js';
 import aiRouter      from './routes/ai.js';
 import inviteRouter  from './routes/invite.js';
+import lifestyleRouter from './routes/lifestyle.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST_DIR   = join(__dirname, '..', 'dist');
@@ -27,6 +28,19 @@ if (!HAS_DIST) {
   }));
 }
 
+// rarebook 패밀리 간 라이프스타일 신호 교차 조회 — pkl(서재)·www(서점)가 브라우저에서
+// rb_session 쿠키로 이 API를 직접 호출한다. 다른 API는 SPA 자체 호출만 쓰므로 CORS 불필요,
+// 이 엔드포인트만 좁게 서브도메인에 허용한다.
+const RAREBOOK_ORIGINS = [
+  'https://rarebook.co.kr', 'https://www.rarebook.co.kr',
+  'https://pkl.rarebook.co.kr', 'https://cooking.rarebook.co.kr',
+  'http://localhost:5173', 'http://localhost:4173',
+];
+app.use('/api/lifestyle', cors({
+  origin: (origin, cb) => cb(null, !origin || RAREBOOK_ORIGINS.includes(origin)),
+  credentials: true,
+}));
+
 app.use(express.json({ limit: '20mb' }));
 
 // ── API ─────────────────────────────────────────────────
@@ -39,6 +53,7 @@ app.use('/api/grocery', groceryRouter);
 app.use('/api/fridge',  fridgeRouter);
 app.use('/api/ai',      aiRouter);
 app.use('/api/invite',  inviteRouter);
+app.use('/api/lifestyle', lifestyleRouter);
 app.get('/api/health', (_req, res) =>
   res.json({ ok: true, mode: HAS_DIST ? 'production' : 'dev', time: new Date().toISOString() }),
 );
