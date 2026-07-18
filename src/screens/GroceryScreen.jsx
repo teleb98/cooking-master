@@ -126,6 +126,8 @@ export default function GroceryScreen() {
   const [fetchError, setFetchError] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [recs, setRecs] = useState([]);
+  const [addingRec, setAddingRec] = useState(null); // 추가 중인 추천 재료 이름
 
   const weekStart = getWeekStart();
 
@@ -138,7 +140,30 @@ export default function GroceryScreen() {
       .finally(() => setLoading(false));
   }, [weekStart]);
 
+  const loadRecs = useCallback(() => {
+    apiFetch(`/grocery/recommend?week_start=${weekStart}`)
+      .then(d => setRecs(d.recommendations ?? []))
+      .catch(() => setRecs([]));
+  }, [weekStart]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadRecs(); }, [loadRecs]);
+
+  const addRecommendation = async (rec) => {
+    setAddingRec(rec.name);
+    try {
+      await apiFetch('/grocery', {
+        method: 'POST',
+        body: JSON.stringify({ week_start: weekStart, items: [{ name: rec.name, qty: rec.qty, category: rec.category }] }),
+      });
+      setRecs(prev => prev.filter(r => r.name !== rec.name));
+      await load();
+    } catch {
+      showToast('추천 재료 추가에 실패했어요.');
+    } finally {
+      setAddingRec(null);
+    }
+  };
 
   const toggle = async (id) => {
     const item = items.find(i => i.id === id);
@@ -168,6 +193,7 @@ export default function GroceryScreen() {
     try {
       await apiFetch('/grocery', { method: 'POST', body: JSON.stringify({ week_start: weekStart }) });
       await load();
+      loadRecs();
     } catch {
       showToast('장보기 목록 생성에 실패했어요.');
     } finally {
@@ -303,6 +329,40 @@ export default function GroceryScreen() {
             }}>
               {generating ? '생성 중...' : '장보기 목록 자동 생성'}
             </button>
+          </div>
+        )}
+
+        {/* 추천 재료 — 영수증 기반 자주 구매한 식재료 + 자주 만든 메뉴의 식재료 */}
+        {recs.length > 0 && (
+          <div style={{ margin: '4px 0 16px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink-3)', letterSpacing: '0.06em', padding: '4px 4px 8px' }}>
+              💡 추천 재료 · 자주 사거나 자주 만드는 메뉴 기준
+            </div>
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2 }} className="no-scrollbar">
+              {recs.map(rec => (
+                <button
+                  key={rec.name}
+                  onClick={() => addRecommendation(rec)}
+                  disabled={addingRec === rec.name}
+                  style={{
+                    flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '9px 12px', borderRadius: 12,
+                    background: 'var(--surface)', border: '1px solid var(--line)',
+                    opacity: addingRec === rec.name ? 0.6 : 1,
+                  }}
+                >
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>{rec.name}</span>
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 600, padding: '2px 6px', borderRadius: 999,
+                    background: rec.reason === 'both' ? `${accent}22` : 'var(--bg-2)',
+                    color: rec.reason === 'both' ? accent : 'var(--ink-3)',
+                  }}>
+                    {rec.reason === 'purchase' ? '자주 구매' : rec.reason === 'menu' ? '자주 만듦' : '자주 구매·자주 만듦'}
+                  </span>
+                  <span style={{ color: accent, fontSize: 16, lineHeight: 1 }}>{addingRec === rec.name ? '…' : '+'}</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

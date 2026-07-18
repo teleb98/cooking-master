@@ -157,6 +157,76 @@ describe('GroceryList rendering', () => {
   });
 });
 
+// ── 장보기 추천 재료 — 클릭해서 담기 ────────────────────────────────────────
+function RecommendationRow({ rec, onAdd, adding }) {
+  return (
+    <button data-testid={`rec-${rec.name}`} onClick={() => onAdd(rec)} disabled={adding === rec.name}>
+      <span data-testid={`rec-name-${rec.name}`}>{rec.name}</span>
+      <span data-testid={`rec-badge-${rec.name}`}>
+        {rec.reason === 'purchase' ? '자주 구매' : rec.reason === 'menu' ? '자주 만듦' : '자주 구매·자주 만듦'}
+      </span>
+    </button>
+  );
+}
+
+function RecommendationList({ initialRecs, addFn }) {
+  const [recs, setRecs] = useState(initialRecs);
+  const [adding, setAdding] = useState(null);
+
+  const onAdd = async (rec) => {
+    setAdding(rec.name);
+    try {
+      await addFn(rec);
+      setRecs(prev => prev.filter(r => r.name !== rec.name));
+    } catch {
+      // 실패 시 목록에 그대로 남김(호출 측에서 토스트 등으로 안내)
+    } finally {
+      setAdding(null);
+    }
+  };
+
+  return (
+    <div>
+      {recs.map(rec => <RecommendationRow key={rec.name} rec={rec} onAdd={onAdd} adding={adding} />)}
+      {recs.length === 0 && <div data-testid="rec-empty">추천 없음</div>}
+    </div>
+  );
+}
+
+describe('장보기 추천 재료', () => {
+  it('추천 항목과 사유 배지를 렌더링한다', () => {
+    const recs = [
+      { name: '양파', reason: 'purchase' },
+      { name: '두부', reason: 'both' },
+      { name: '돼지고기', reason: 'menu' },
+    ];
+    render(<RecommendationList initialRecs={recs} addFn={vi.fn()} />);
+    expect(screen.getByTestId('rec-badge-양파').textContent).toBe('자주 구매');
+    expect(screen.getByTestId('rec-badge-두부').textContent).toBe('자주 구매·자주 만듦');
+    expect(screen.getByTestId('rec-badge-돼지고기').textContent).toBe('자주 만듦');
+  });
+
+  it('추천 항목을 클릭하면 담기 요청 후 목록에서 사라진다', async () => {
+    const addFn = vi.fn().mockResolvedValue();
+    const recs = [{ name: '양파', reason: 'purchase' }];
+    render(<RecommendationList initialRecs={recs} addFn={addFn} />);
+
+    fireEvent.click(screen.getByTestId('rec-양파'));
+    expect(addFn).toHaveBeenCalledWith(recs[0]);
+    await waitFor(() => expect(screen.getByTestId('rec-empty')).toBeInTheDocument());
+  });
+
+  it('담기 실패해도 크래시 없이 목록에 남는다', async () => {
+    const addFn = vi.fn().mockRejectedValue(new Error('network'));
+    const recs = [{ name: '양파', reason: 'purchase' }];
+    render(<RecommendationList initialRecs={recs} addFn={addFn} />);
+
+    fireEvent.click(screen.getByTestId('rec-양파'));
+    await waitFor(() => expect(screen.getByTestId('rec-양파')).not.toBeDisabled());
+    expect(screen.getByTestId('rec-name-양파')).toBeInTheDocument();
+  });
+});
+
 // ── Toggle optimistic update ──────────────────────────────────────────────────
 function ToggleItem({ item, onToggle }) {
   return (
