@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import db from '../db.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { getPlanType } from '../_limits.js';
+import { getSellerInfo, SUBSCRIPTION_TERMS } from '../_seller.js';
 
 const router = Router();
 
@@ -147,6 +148,8 @@ router.get('/', requireAuth, async (req, res) => {
       plan_type: planType,
       billing_customer_key: profile.billing_customer_key ?? `cm_${uid}`,
       toss_client_key: process.env.TOSS_CLIENT_KEY ?? '',
+      seller_info: getSellerInfo(),
+      subscription_terms: SUBSCRIPTION_TERMS,
     };
 
     res.json({ user: toPublicUser(userRow), profile, members, vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? null, planInfo });

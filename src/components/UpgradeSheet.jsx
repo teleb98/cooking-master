@@ -48,6 +48,9 @@ export default function UpgradeSheet() {
   const clientKey     = planInfo?.toss_client_key ?? '';
   const customerKey   = planInfo?.billing_customer_key ?? '';
   const appUrl        = window.location.origin;
+  const seller        = planInfo?.seller_info ?? null;
+  const terms         = planInfo?.subscription_terms ?? null;
+  const [showTerms, setShowTerms] = useState(false);
 
   const handleSubscribe = async () => {
     if (!clientKey) {
@@ -250,10 +253,42 @@ export default function UpgradeSheet() {
           )}
 
           {!isPremium && !isAdmin && !isTest && (
-            <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--ink-4)', lineHeight: 1.6 }}>
-              카드 등록 후 즉시 결제됩니다. 언제든지 해지할 수 있으며,<br/>
-              해지 시 이번 달 만료일까지 계속 이용 가능합니다.
-            </div>
+            <>
+              {/* 정기결제 고지 (전자상거래법·정기결제 표시의무) */}
+              <div style={{ fontSize: 11.5, color: 'var(--ink-3)', lineHeight: 1.7, background: 'var(--surface-2, #00000008)', borderRadius: 12, padding: '11px 13px' }}>
+                <div>· 매월 <b style={{ color: 'var(--ink)' }}>{(terms?.priceKRW ?? 2900).toLocaleString()}원</b>이 등록하신 카드로 <b style={{ color: 'var(--ink)' }}>자동 결제·갱신</b>됩니다({terms?.period ?? '월 1회 (30일)'}).</div>
+                <div>· 카드 등록 즉시 첫 결제가 진행되며, 프리미엄 혜택이 바로 적용됩니다.</div>
+                <div>· 언제든 해지할 수 있고, 해지 시 <b style={{ color: 'var(--ink)' }}>다음 갱신부터 청구되지 않으며</b> 이번 달 만료일까지는 계속 이용 가능합니다.</div>
+              </div>
+
+              {/* 판매자 정보 · 환불규정 (펼치기) */}
+              <button
+                onClick={() => setShowTerms(v => !v)}
+                style={{ background: 'none', border: 'none', padding: '2px 0', fontSize: 11, color: 'var(--ink-4)', textDecoration: 'underline', cursor: 'pointer', textAlign: 'center' }}
+              >
+                판매자 정보 · 환불/청약철회 규정 {showTerms ? '접기' : '보기'}
+              </button>
+              {showTerms && (
+                <div style={{ fontSize: 10.5, color: 'var(--ink-4)', lineHeight: 1.75, background: 'var(--surface-2, #00000008)', borderRadius: 12, padding: '11px 13px' }}>
+                  {terms?.refundPolicy && (
+                    <div style={{ marginBottom: 8 }}><b style={{ color: 'var(--ink-3)' }}>환불·청약철회</b><br/>{terms.refundPolicy}</div>
+                  )}
+                  {seller && (
+                    <div>
+                      <b style={{ color: 'var(--ink-3)' }}>판매자 정보</b><br/>
+                      상호 {seller.company} · 대표 {seller.ceo}<br/>
+                      사업자등록번호 {seller.bizNo || '(등록 예정)'}<br/>
+                      통신판매업신고 {seller.moNo || '(등록 예정)'}<br/>
+                      주소 {seller.address}<br/>
+                      문의 {seller.tel} · {seller.email}
+                      {seller.ready === false && (
+                        <div style={{ marginTop: 6, color: 'var(--accent, #c0392b)' }}>※ 사업자 등록 정보 준비 중입니다(현재 결제는 테스트 모드).</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -25,6 +25,20 @@ describe('GET /api/user/profile', () => {
     expect(res.body.planInfo).toMatchObject({ plan: 'free', plan_type: 'free', is_admin: false, is_test: false });
   });
 
+  it('exposes seller info + subscription terms for commerce compliance', async () => {
+    const { auth } = await authedUser();
+    const res = await request(app).get('/api/user/profile').set(auth);
+    const { seller_info, subscription_terms } = res.body.planInfo;
+    // 판매자(사업자) 정보 — 전자상거래법 표시 항목
+    expect(seller_info).toMatchObject({ company: expect.any(String), email: expect.any(String) });
+    expect(seller_info).toHaveProperty('bizNo');
+    expect(seller_info).toHaveProperty('moNo');
+    expect(typeof seller_info.ready).toBe('boolean');   // 사업자·통판번호 모두 있어야 true
+    // 정기결제 고지 — 가격·주기·자동갱신·환불정책
+    expect(subscription_terms).toMatchObject({ autoRenew: true, priceKRW: expect.any(Number) });
+    expect(subscription_terms.refundPolicy).toContain('환불');
+  });
+
   it('auto-grants admin to users whose email is in ADMIN_EMAILS', async () => {
     const { auth } = await authedUser({ email: 'admin@example.com' });
     const res = await request(app).get('/api/user/profile').set(auth);
