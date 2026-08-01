@@ -162,6 +162,16 @@ router.put('/', requireAuth, async (req, res) => {
     for (const id of toDelete) await db.run('DELETE FROM meal_plans WHERE id = $1', [id]);
     for (const id of toKeep) await db.run('UPDATE meal_plans SET family_group_id = $1 WHERE id = $2', [inviterGroupId, id]);
 
+    // 냉장고 재고도 가족그룹으로 이관 — 이게 없으면 파트너 연결 전에 각자
+    // 등록해 둔 재고가 family_group_id=NULL 로 남아 연결 후 양쪽 기기 어디에서도
+    // 영영 보이지 않게 된다(모바일/PC 미동기화의 실제 원인). 식단과 달리 재고는
+    // "같은 재료 2개"가 자연스러운 경우가 흔해 중복 제거 없이 전부 이관한다
+    // (소비 이력도 그대로 보존해야 장보기 추천의 "최근 소비" 분석이 끊기지 않음).
+    await db.run(
+      'UPDATE fridge_items SET family_group_id = $1 WHERE family_group_id IS NULL AND user_id IN ($2, $3)',
+      [inviterGroupId, invite.invited_by, userId],
+    );
+
     res.json({ ok: true, partner_name: inviterName, family_group_id: inviterGroupId, conflict_count: conflictCount });
   } catch (err) {
     console.error('[invite PUT]', err.message);

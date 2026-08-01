@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useFamily } from '../context/FamilyContext';
 import Icon from '../icons';
 
 /* 이미지 압축: 리사이즈 + 회전 보정 + 그레이스케일·대비 강화 → base64 */
@@ -579,20 +580,42 @@ function AddSheet({ open, onClose, onAdd, accent }) {
 /* ── 메인 화면 ───────────────────────────────────────── */
 export default function FridgeScreen() {
   const { accent, showToast } = useApp();
+  const { family } = useFamily();
   const navigate = useNavigate();
   const [items, setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
+  // silent=true 는 이미 보이는 목록을 유지한 채 조용히 최신 데이터로 갱신한다
+  // (다른 기기·파트너가 추가/소비한 항목 반영). 최초 진입 때만 로딩 화면을 보여준다.
+  const load = useCallback(({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     apiFetch('/fridge')
       .then(d => setItems(d.items ?? []))
-      .catch(() => showToast('재고를 불러오지 못했어요.'))
-      .finally(() => setLoading(false));
+      .catch(() => { if (!silent) showToast('재고를 불러오지 못했어요.'); })
+      .finally(() => { if (!silent) setLoading(false); });
   }, [showToast]);
 
   useEffect(() => { load(); }, [load]);
+
+  // 앱/탭으로 다시 돌아왔을 때 즉시 최신화 — 모바일에서 추가한 뒤 이미 열려있던
+  // PC 탭으로 돌아왔을 때 새로고침 없이도 반영되도록 한다(가족 연결 여부 무관).
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') load({ silent: true }); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+  }, [load]);
+
+  // 파트너와 연결돼 있으면 30초마다도 자동 새로고침(같은 화면을 동시에 보고 있을 때 대비)
+  useEffect(() => {
+    if (!family.partner_connected) return;
+    const id = setInterval(() => load({ silent: true }), 30_000);
+    return () => clearInterval(id);
+  }, [family.partner_connected, load]);
 
   const handleAdd = async (newItems) => {
     try {

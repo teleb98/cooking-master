@@ -125,4 +125,39 @@ describe('PUT /api/invite (accept)', () => {
     expect(conflictSlot.menu_name).toBe('오트밀 죽'); // inviter's wins
     expect(uniqueSlot.menu_name).toBe('비빔밥'); // acceptor's unique meal carried over
   });
+
+  it('migrates pre-existing personal fridge items into the shared family group (mobile/PC sync fix)', async () => {
+    const owner = await authedUser();
+    const acceptor = await authedUser();
+
+    // 가족그룹 연결 전 — 각자 자기 계정으로 등록한 재고(예: 모바일에서 등록한 항목)
+    await request(app).post('/api/fridge').set(owner.auth).send({ name: '우유', qty: '1L', category: '유제품' });
+    await request(app).post('/api/fridge').set(acceptor.auth).send({ name: '두부', qty: '1모', category: '유제품' });
+
+    const created = await request(app).post('/api/invite').set(owner.auth).send({});
+    await request(app).put('/api/invite').set(acceptor.auth).send({ token: created.body.token });
+
+    // 연결 후 — 어느 쪽 계정(=PC든 모바일이든)으로 조회해도 둘 다 보여야 한다
+    const fromOwner = await request(app).get('/api/fridge').set(owner.auth);
+    const fromAcceptor = await request(app).get('/api/fridge').set(acceptor.auth);
+    const ownerNames = fromOwner.body.items.map(i => i.name).sort();
+    const acceptorNames = fromAcceptor.body.items.map(i => i.name).sort();
+    expect(ownerNames).toEqual(['두부', '우유']);
+    expect(acceptorNames).toEqual(['두부', '우유']);
+  });
+
+  it('keeps duplicate-named fridge items from both partners (no dedup, unlike meal slots)', async () => {
+    const owner = await authedUser();
+    const acceptor = await authedUser();
+
+    await request(app).post('/api/fridge').set(owner.auth).send({ name: '계란', qty: '10개', category: '기타' });
+    await request(app).post('/api/fridge').set(acceptor.auth).send({ name: '계란', qty: '6개', category: '기타' });
+
+    const created = await request(app).post('/api/invite').set(owner.auth).send({});
+    await request(app).put('/api/invite').set(acceptor.auth).send({ token: created.body.token });
+
+    const shared = await request(app).get('/api/fridge').set(owner.auth);
+    const eggEntries = shared.body.items.filter(i => i.name === '계란');
+    expect(eggEntries.length).toBe(2); // 둘 다 보존(재고는 병합/삭제 대상 아님)
+  });
 });
