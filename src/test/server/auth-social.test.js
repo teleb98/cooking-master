@@ -22,6 +22,22 @@ describe('POST /api/auth/social — 보안: opt-in 플래그 없이는 항상 �
   });
 });
 
+describe('GET /api/auth/users — 보안: 인증 없이 전체 회원 이메일을 나열하므로 opt-in 플래그 없이는 항상 차단', () => {
+  it('ALLOW_TEST_SOCIAL_LOGIN 이 꺼져 있으면(운영 기본값) 403 — PII 유출 방지', async () => {
+    // 실사고: NODE_ENV==='production' 가드에만 기대던 이전 코드가 이 배포에서
+    // NODE_ENV=development 로 운영되는 바람에 무인증으로 라이브에 노출돼 있었다.
+    const prev = process.env.ALLOW_TEST_SOCIAL_LOGIN;
+    delete process.env.ALLOW_TEST_SOCIAL_LOGIN;
+    try {
+      const res = await request(app).get('/api/auth/users');
+      expect(res.status).toBe(403);
+      expect(res.body).not.toHaveProperty('users');
+    } finally {
+      process.env.ALLOW_TEST_SOCIAL_LOGIN = prev;
+    }
+  });
+});
+
 describe('POST /api/auth/social', () => {
   it('rejects when required fields are missing', async () => {
     const res = await request(app).post('/api/auth/social').send({ provider: 'google' });

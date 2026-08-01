@@ -87,9 +87,11 @@ router.get('/me', requireAuth, async (req, res) => {
 // POST /api/auth/logout
 router.post('/logout', (_req, res) => res.json({ ok: true }));
 
-// GET /api/auth/users  — dev only
+// GET /api/auth/users  — dev only. 인증 없이 전체 사용자 이메일·이름을 나열하므로
+// (실제로 이 배포에서 NODE_ENV=development 인 채로 라이브에 노출되어 있었다 —
+// 별도 인프라 이슈는 아래 참고) NODE_ENV 에 기대지 않는 opt-in 플래그로 기본 차단.
 router.get('/users', async (req, res) => {
-  if (process.env.NODE_ENV === 'production') return res.status(403).json({ error: 'Forbidden' });
+  if (process.env.ALLOW_TEST_SOCIAL_LOGIN !== 'true') return res.status(403).json({ error: 'Forbidden' });
   const users = await db.getMany('SELECT * FROM users ORDER BY created_at DESC');
   res.json({ users: users.map(toPublicUser) });
 });
