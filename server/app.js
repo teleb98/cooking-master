@@ -43,6 +43,23 @@ app.use('/api/lifestyle', cors({
 
 app.use(express.json({ limit: '20mb' }));
 
+// 최소 접근 로그 — /api/auth/social 무인증 접근 사건 조사 중, 이 앱에 요청 단위
+// 로그가 전혀 없어(성공한 요청은 어떤 흔적도 안 남음) 과거 악용 여부를 확인할
+// 수 없었다. 외부 패키지 없이 method·경로·상태코드·IP·소요시간만 stdout(launchd 가
+// logs/server.out.log 로 리다이렉트)에 남긴다. 응답 바디는 남기지 않는다(PII 방지).
+app.use((req, res, next) => {
+  const start = Date.now();
+  // req.originalUrl 을 미리 캡처 — 서브라우터로 dispatch 되면 req.path/url 이
+  // 마운트 경로 기준 상대경로로 바뀌어(예: /api/auth/users → /users), finish
+  // 콜백 시점엔 이미 값이 달라져 있다.
+  const { method, originalUrl } = req;
+  res.on('finish', () => {
+    const ip = req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    console.log(`[access] ${method} ${originalUrl} ${res.statusCode} ${Date.now() - start}ms ip=${ip}`);
+  });
+  next();
+});
+
 // ── API ─────────────────────────────────────────────────
 app.use('/api/auth',    authRouter);
 app.use('/api/auth',    oauthRouter);
