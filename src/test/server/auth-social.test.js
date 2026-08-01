@@ -5,6 +5,23 @@ import { setupTestApp } from './setupApp.js';
 let app;
 beforeAll(async () => { ({ app } = await setupTestApp()); });
 
+describe('POST /api/auth/social — 보안: opt-in 플래그 없이는 항상 차단', () => {
+  it('ALLOW_TEST_SOCIAL_LOGIN 이 꺼져 있으면(운영 기본값) 유효한 요청도 403', async () => {
+    // 이 라우트는 실제 OAuth 검증 없이 클라이언트가 주장하는 provider_id 로 유효한
+    // JWT를 발급하므로, opt-in 플래그가 없는 한(운영 기본값) 항상 막혀야 한다.
+    // NODE_ENV 값에는 기대지 않는다 — 이 배포는 NODE_ENV=development 로 운영되므로.
+    const prev = process.env.ALLOW_TEST_SOCIAL_LOGIN;
+    delete process.env.ALLOW_TEST_SOCIAL_LOGIN;
+    try {
+      const res = await request(app).post('/api/auth/social')
+        .send({ provider: 'google', provider_id: 'attacker-guessed-id', name: '아무나' });
+      expect(res.status).toBe(403);
+    } finally {
+      process.env.ALLOW_TEST_SOCIAL_LOGIN = prev;
+    }
+  });
+});
+
 describe('POST /api/auth/social', () => {
   it('rejects when required fields are missing', async () => {
     const res = await request(app).post('/api/auth/social').send({ provider: 'google' });

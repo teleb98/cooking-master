@@ -22,8 +22,16 @@ function toPublicUser(u) {
   };
 }
 
-// POST /api/auth/social  — upsert user, return JWT
+// POST /api/auth/social  — 테스트 전용 편의 라우트(진짜 OAuth 검증 없이 클라이언트가
+// 주장하는 provider_id 를 그대로 신뢰해 임의 계정의 유효한 JWT를 발급함). 실제 로그인은
+// /api/auth/oauth → /api/auth/callback 이 처리하며(서버 간 code 교환 + state/nonce
+// 검증까지 거침), 클라이언트 어디에서도 이 라우트를 호출하지 않는다.
+// NODE_ENV==='production' 가드에 기대지 않는다 — 이 배포는 NODE_ENV=development 로
+// 운영되고 있어 그 값만으로는 잠기지 않는다. 전용 opt-in 플래그로 기본 차단.
 router.post('/social', async (req, res) => {
+  if (process.env.ALLOW_TEST_SOCIAL_LOGIN !== 'true') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   try {
     const { provider, provider_id, name, email, avatar_url } = req.body ?? {};
 

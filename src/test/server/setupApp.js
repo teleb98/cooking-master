@@ -21,6 +21,9 @@ export async function setupTestApp(envOverrides = {}) {
   process.env.JWT_SECRET = 'test-jwt-secret';
   process.env.APP_URL = 'http://localhost:3002';
   process.env.ADMIN_EMAILS = 'admin@example.com';
+  // /api/auth/social 은 테스트 픽스처(registerUser)가 의존하는 편의 라우트라
+  // 테스트 환경에서만 명시적으로 켠다(운영 기본값은 차단).
+  process.env.ALLOW_TEST_SOCIAL_LOGIN = 'true';
   delete process.env.DATABASE_URL;
   for (const key of OAUTH_KEYS) delete process.env[key];
   for (const [k, v] of Object.entries(envOverrides)) process.env[k] = v;
